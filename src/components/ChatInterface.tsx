@@ -12,7 +12,7 @@ interface Message {
 }
 
 export default function ChatInterface() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -57,7 +57,7 @@ export default function ChatInterface() {
 
     try {
       // Pass user profile to server action for personalized responses
-      const response = await sendMessage(userMessage.content, profile);
+      const response = await sendMessage(userMessage.content, user?.id, profile);
       
       if (!response.success || !response.message) {
         throw new Error(response.error || "Failed to get response");

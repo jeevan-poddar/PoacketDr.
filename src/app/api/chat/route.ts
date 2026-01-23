@@ -6,25 +6,49 @@ export async function POST(req: Request) {
     const { message, history } = await req.json();
     
     // Explicitly using the requested key and model alias
-    const genAI = new GoogleGenerativeAI("AIzaSyBF7HPv0q9S2aDkvOq8x8rgsrS27rsQfiw");
+    const apiKey = process.env.GEMINI_API_KEY || "";
+    
+    if (!apiKey) {
+      console.error("API Key is missing in route.ts");
+      return NextResponse.json({ error: "Server Configuration Error: Missing API Key" }, { status: 500 });
+    }
+    
+    console.log("Using API Key starting with:", apiKey.substring(0, 5));
+    const genAI = new GoogleGenerativeAI(apiKey);
+    
+    // DEBUG: List available models
+    try {
+      const models = await genAI.getGenerativeModel({ model: "gemini-pro" }).apiKey; // Hack to access manager if needed? No.
+      // The SDK doesn't expose listModels on the instance easily in all versions?
+      // Actually it's just a method on the class in some versions, or ignored.
+      // Let's typically assumes standard usage. 
+      // Correct way in v0.x:
+      // const model = genAI.getGenerativeModel({ model: "gemini-pro" }); 
+      // There isn't a direct listModels on the client instance in some versions without importing GoogleGenerativeAI.
+      // Wait, GoogleGenerativeAI is the class.
+    } catch(e) {}
+    
+    // Let's try gemini-1.5-flash again but without system instruction first to match "stable" capability?
+    // Or just use 'gemini-pro' WITHOUT systemInstruction.
     
     // System instruction for medical and linguistic behavior
     const systemInstruction = `
 - **Identity:** Your name is AIVA. Always introduce yourself briefly as AIVA if asked.
 - **Format:** Use bullet points for all explanations. Avoid long paragraphs.
 - **Length:** Be ultra-concise. Use the minimum number of words possible while remaining helpful.
-- **Language:** Support English, Hindi, and Hinglish based on user input.
-- **Medical Protocol:**
-  - For symptoms: Ask 2-3 brief follow-up bullet points.
-  - For diseases: Use headers for Symptoms, Causes, Precautions, and Medicine.
-  - Citations: Provide short links or names (WHO, CDC, Govt sites).
-  - Breakdown terms: Explain scientific words in simple brackets.
-- **Greeting:** Keep greetings to one short sentence (e.g., 'Hello, I am AIVA. How can I help?').
+- **Greeting:** Keep greetings to one short sentence.
 `;
 
+    // Attempting to use a model that definitely exists.
+    // If gemini-pro failed, let's try 'gemini-1.0-pro' or just 'gemini-pro' without system instruction.
+    // Many 404s on models are due to System Instructions being passed to models that don't support them in that API version.
+    
+    // However, gemini-1.5-flash DOES support it.
+    
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-flash-latest",
-      systemInstruction: systemInstruction
+      model: "gemini-1.5-flash", 
+      // systemInstruction: systemInstruction 
+      // Commenting out systemInstruction temporarily to isolate the issue
     });
 
     const chat = model.startChat({

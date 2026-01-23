@@ -39,7 +39,7 @@ Always advise consulting a doctor for serious symptoms or emergencies.`;
   return prompt;
 }
 
-export async function sendMessage(userMessage: string, profile?: UserProfile | null): Promise<ChatResponse> {
+export async function sendMessage(userMessage: string, userId?: string | null, profile?: UserProfile | null): Promise<ChatResponse> {
   if (!API_KEY) {
     console.error("Server Action: API Key is missing.");
     return { success: false, error: "API Key is missing on Server." };
@@ -50,7 +50,7 @@ export async function sendMessage(userMessage: string, profile?: UserProfile | n
   try {
     // Check for authenticated user
     const { data: { user } } = await supabase.auth.getUser();
-    const isGuest = !user;
+    const isGuest = !user && !userId;
     
     console.log("Server Action: User status:", isGuest ? "Guest" : "Logged In");
 
@@ -80,12 +80,12 @@ export async function sendMessage(userMessage: string, profile?: UserProfile | n
     console.log("Server Action: Received response from Gemini");
 
     // Only store in Supabase if user is logged in
-    if (!isGuest) {
+    if (!isGuest && userId) {
       const { error: dbError } = await (supabase
         .from('messages') as any)
         .insert([
-          { role: 'user' as const, content: userMessage, created_at: new Date().toISOString() },
-          { role: 'assistant' as const, content: responseText, created_at: new Date().toISOString() }
+          { user_id: userId, role: 'user' as const, content: userMessage, created_at: new Date().toISOString() },
+          { user_id: userId, role: 'assistant' as const, content: responseText, created_at: new Date().toISOString() }
         ]);
 
       if (dbError) {

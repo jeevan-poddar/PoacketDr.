@@ -54,14 +54,16 @@ export default function ChatPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
+        console.error('Server reported error:', errorData);
+        throw new Error(errorData.error || 'Failed to send message');
       }
 
       const data = await response.json();
       setMessages((prev) => [...prev, { role: 'model', parts: data.text }]);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
-      setMessages((prev) => [...prev, { role: 'model', parts: "I'm having trouble connecting to my brain right now. Try again!" }]);
+      setMessages((prev) => [...prev, { role: 'model', parts: `Error: ${error.message || "Something went wrong."}` }]);
     } finally {
       setIsLoading(false);
       // Keep focus on input after sending
