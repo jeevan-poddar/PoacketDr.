@@ -36,20 +36,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
+    let mounted = true;
+
+    // Check for critical env vars
+    console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Exists' : 'Missing');
+    console.log('Supabase Key:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Exists' : 'Missing');
+
+    // 1. Force stop loading after 3 seconds no matter what
+    const timer = setTimeout(() => {
+      if (mounted) {
+        console.warn("Supabase connection timed out. Falling back to public mode.");
         setLoading(false);
       }
-    });
+    }, 3000);
+
+    // 2. Try to get session
+    const initAuth = async () => {
+      console.log("AuthProvider: Getting session...");
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+
+        console.log("AuthProvider: Session retrieved", { session, error });
+        
+        if (error) {
+           console.error("AuthProvider: Session error", error);
+        } else {
+            setSession(session);
+            setUser(session?.user ?? null);
+            
+            if (session?.user) {
+              console.log("AuthProvider: Fetching profile for user", session.user.id);
+              await fetchProfile(session.user.id);
+            } else {
+               console.log("AuthProvider: No user detected");
+            }
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError' || err.message?.includes('timeout')) {
+            console.warn("Auth check timed out - defaulting to Public Mode");
+        } else {
+            console.error("AuthProvider: Unexpected error", err);
+        }
+      } finally {
+        if (mounted) {
+          clearTimeout(timer); // Cancel the emergency timer
+          setLoading(false); 
+        }
+      }
+    };
+
+    initAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event: string, session: Session | null) => {
+      async (event, session) => {
+        if (!mounted) return;
+        console.log("AuthProvider: Auth state changed", event);
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -62,7 +106,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => { 
+        mounted = false;
+        clearTimeout(timer);
+        subscription.unsubscribe();
+    };
   }, []);
 
   async function fetchProfile(userId: string) {
@@ -74,11 +122,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error && error.code !== "PGRST116") {
-        console.error("Error fetching profile:", error);
+        throw error; // Throw to be caught by catch block
       }
       setProfile(data as Profile | null);
-    } catch (e) {
-      console.error("Profile fetch error:", e);
+    } catch (e: any) {
+      if (e.name === 'AbortError' || e.message?.includes('timeout') || e.message?.includes('fetch failed')) {
+          console.warn("Profile fetch timed out - using guest profile");
+          setProfile({
+            id: userId,
+            name: "Guest User",
+            email: user?.email || "guest@example.com",
+            age: null, height_cm: null, weight_kg: null,
+            gender: null, blood_type: null, allergies: null, medical_conditions: null
+          });
+      } else {
+        console.error("Profile fetch error:", e);
+      }
     } finally {
       setLoading(false);
     }

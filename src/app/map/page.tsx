@@ -2,6 +2,7 @@
 import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getAlerts, Alert } from "@/app/actions/alerts";
 import { MapPin, AlertTriangle, Activity, Shield, RefreshCw, Info, Wind, Thermometer, Droplets, Navigation } from "lucide-react";
 
 // Dynamic import with SSR disabled
@@ -16,16 +17,6 @@ const OutbreakMap = dynamic(() => import("@/components/OutbreakMap"), {
     </div>
   ),
 });
-
-interface Alert {
-  id: string;
-  title: string;
-  description: string;
-  severity: "high" | "medium" | "low";
-  latitude: number;
-  longitude: number;
-  radius?: number;
-}
 
 interface LocationData {
   city: string;
@@ -67,10 +58,11 @@ export default function MapPage() {
 
   async function fetchAlerts() {
     try {
-      const { data } = await supabase.from("alerts").select("*");
-      if (data) setAlerts(data as Alert[]);
+      // Use Server Action instead of direct DB call to get Fallback Data support
+      const data = await getAlerts();
+      if (data) setAlerts(data);
     } catch (e) {
-      // Error is handled silently or could be logged to a service
+       console.error("Failed to fetch alerts", e);
     }
   }
 
@@ -377,7 +369,7 @@ export default function MapPage() {
               {alerts.map((alert) => (
                 <div 
                   key={alert.id}
-                  onClick={() => setFocusedLocation({ lat: alert.latitude, lon: alert.longitude })}
+                  onClick={() => setFocusedLocation({ lat: alert.lat, lon: alert.lng })}
                   className={`p-3 rounded-xl border-l-4 cursor-pointer transition-all hover:shadow-md ${
                     alert.severity === "high" 
                       ? "bg-red-50 border-red-500 hover:bg-red-100" 

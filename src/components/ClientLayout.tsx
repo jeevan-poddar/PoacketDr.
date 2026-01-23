@@ -1,4 +1,5 @@
 "use client";
+import { useEffect } from "react";
 import { useAuth } from "@/context/AuthProvider";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";

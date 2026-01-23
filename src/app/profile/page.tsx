@@ -49,7 +49,7 @@ export default function ProfilePage() {
     setError(null);
     setSaved(false);
 
-    const { error } = await supabase.from("profiles").upsert({
+    const { error } = await (supabase.from("profiles") as any).upsert({
       id: user.id,
       name,
       email: user.email,

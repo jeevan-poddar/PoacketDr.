@@ -9,6 +9,8 @@ export default function Sidebar() {
   const router = useRouter();
   const { profile, signOut, user } = useAuth();
 
+  if (pathname?.startsWith('/admin')) return null;
+
   const links = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/chat', label: 'Medical Chat', icon: MessageSquare },

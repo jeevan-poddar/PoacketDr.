@@ -1,61 +1,40 @@
 "use client";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/context/AuthProvider";
 import { Activity, ShieldAlert, User, Syringe, MapPin, MessageSquare, Heart, TrendingUp, Calendar } from "lucide-react";
 import Link from "next/link";
+import { getDashboardStats } from "@/app/actions/dashboard";
 
 export default function DashboardPage() {
-  const { user } = useAuth();
-  const [nextVaccine, setNextVaccine] = useState<any>(null);
-  const [activeAlertsCount, setActiveAlertsCount] = useState<number>(0);
+  const { user, profile } = useAuth();
+  const [stats, setStats] = useState<{
+    vaccineCount: number;
+    outbreakCount: number;
+    nextDue: string | null;
+    healthScore: number;
+  }>({
+    vaccineCount: 0,
+    outbreakCount: 0,
+    nextDue: "Loading...",
+    healthScore: 92
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchData() {
-      if (!user) return; // Don't fetch if no user
-
+    async function loadStats() {
+      if (!user) return;
       try {
-        try {
-          const { count, error: countError } = await supabase
-            .from("alerts")
-            .select("*", { count: "exact", head: true });
-          
-          if (!countError && count !== null) {
-              setActiveAlertsCount(count);
-          }
-        } catch (alertError) {
-          console.warn("Alerts table may not exist:", alertError);
-        }
-
-        try {
-          const { data: vaccines, error: vaccineError } = await supabase
-              .from("vaccinations")
-              .select("*")
-              .eq("user_id", user.id) // Explicitly filter by user_id
-              .order('due_date', { ascending: true })
-              .limit(1);
-          
-          // Using explicit filtering as a safeguard, though RLS should also be enabled
-          
-          if (!vaccineError && vaccines && vaccines.length > 0) {
-              setNextVaccine(vaccines[0]);
-          } else {
-              setNextVaccine(null);
-          }
-        } catch (vaccineError) {
-          console.warn("Vaccinations table may not exist:", vaccineError);
-        }
-        
+        const data = await getDashboardStats(user.id);
+        setStats(data);
       } catch (e) {
-        console.error("Error loading dashboard data", e);
+        console.error("Failed to load dashboard stats", e);
       } finally {
         setLoading(false);
       }
     }
     
     if (user) {
-      fetchData();
+      loadStats();
     }
   }, [user]);
 
@@ -73,7 +52,7 @@ export default function DashboardPage() {
               <Heart className="w-8 h-8" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold">Good Morning! 👋</h1>
+              <h1 className="text-3xl font-bold">Good Morning, {profile?.name?.split(' ')[0] || "Guest"}! 👋</h1>
               <p className="text-white/80">Here's your health overview for today</p>
             </div>
           </div>
@@ -81,17 +60,19 @@ export default function DashboardPage() {
           <div className="grid grid-cols-3 gap-4 mt-6">
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
               <p className="text-white/70 text-sm">Health Score</p>
-              <p className="text-2xl font-bold mt-1">92%</p>
+              <p className="text-2xl font-bold mt-1">{stats.healthScore}%</p>
               <TrendingUp className="w-4 h-4 mt-2 text-green-300" />
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-              <p className="text-white/70 text-sm">Active Alerts</p>
-              <p className="text-2xl font-bold mt-1">{activeAlertsCount}</p>
+              <p className="text-white/70 text-sm">Active Outbreaks</p>
+              <p className="text-2xl font-bold mt-1">{stats.outbreakCount}</p>
+              <p className="text-[10px] text-white/50 mt-1">Verified Alerts</p>
               <ShieldAlert className="w-4 h-4 mt-2 text-yellow-300" />
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-              <p className="text-white/70 text-sm">Upcoming</p>
-              <p className="text-2xl font-bold mt-1">{nextVaccine ? "1" : "0"}</p>
+              <p className="text-white/70 text-sm">Immunization</p>
+              <p className="text-2xl font-bold mt-1">{stats.vaccineCount}</p>
+              <p className="text-[10px] text-white/50 mt-1">Pending</p>
               <Calendar className="w-4 h-4 mt-2 text-blue-300" />
             </div>
           </div>
@@ -119,13 +100,13 @@ export default function DashboardPage() {
             </div>
             <h3 className="text-lg font-bold text-slate-800">Vaccinations</h3>
             <p className="text-slate-500 text-sm mt-1">
-              {nextVaccine ? `Next: ${nextVaccine.name}` : "Track your vaccines"}
+              {stats.nextDue ? `Next: ${stats.nextDue}` : "All Caught Up!"}
             </p>
           </div>
         </Link>
         
         {/* Card 3: Map */}
-        <Link href="/map" className="group">
+        <Link href="/outbreak-map" className="group">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-xl hover:scale-[1.02] transition-all duration-300">
             <div className="w-14 h-14 bg-gradient-to-br from-red-400 to-red-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-red-200">
               <MapPin className="w-7 h-7 text-white" />

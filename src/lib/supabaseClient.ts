@@ -1,8 +1,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { Database } from '@/types/supabase'
 
-let supabaseInstance: SupabaseClient | null = null
+let supabaseInstance: SupabaseClient<Database> | null = null
 
-function getSupabaseClient(): SupabaseClient {
+function getSupabaseClient(): SupabaseClient<Database> {
   if (supabaseInstance) {
     return supabaseInstance
   }
@@ -29,17 +30,17 @@ function getSupabaseClient(): SupabaseClient {
           update: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
           delete: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
         }),
-      } as unknown as SupabaseClient
+      } as unknown as SupabaseClient<Database>
     }
     throw new Error('Supabase credentials are required')
   }
 
-  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey)
+  supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey)
   return supabaseInstance
 }
 
 // Export a proxy that lazily initializes the client
-export const supabase = new Proxy({} as SupabaseClient, {
+export const supabase = new Proxy({} as SupabaseClient<Database>, {
   get(_, prop) {
     const client = getSupabaseClient()
     const value = (client as any)[prop]

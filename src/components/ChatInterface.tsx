@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { Send, Bot, User } from "lucide-react";
-import { getMedicalAdvice } from "@/services/geminiService";
+import { sendMessage } from "@/app/actions/chat";
 import { useAuth } from "@/context/AuthProvider";
 
 interface Message {
@@ -56,12 +56,17 @@ export default function ChatInterface() {
     setIsLoading(true);
 
     try {
-      // Pass user profile to gemini for personalized responses
-      const response = await getMedicalAdvice(userMessage.content, profile);
+      // Pass user profile to server action for personalized responses
+      const response = await sendMessage(userMessage.content, profile);
+      
+      if (!response.success || !response.message) {
+        throw new Error(response.error || "Failed to get response");
+      }
+
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: response,
+        content: response.message,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, botMessage]);
@@ -124,6 +129,7 @@ export default function ChatInterface() {
             >
               <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{message.content}</p>
               <p
+                suppressHydrationWarning
                 className={`text-[10px] mt-2 ${
                   message.role === "user" ? "text-white/70" : "text-slate-400"
                 }`}
