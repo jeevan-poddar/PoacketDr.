@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AdminAlert, getAdminData, deleteAlert, verifyAlert, createOfficialAlert, loginAdmin } from "@/app/actions/admin";
+import { AdminAlert, getAdminData, deleteAlert, createOfficialAlert, loginAdmin } from "@/app/actions/admin";
+import { verifyAlert } from "@/app/actions/alerts";
 import { ShieldCheck, XCircle, CheckCircle, Radio, MapPin, Activity, AlertTriangle, RefreshCw, Lock, Key, Trash2, LogOut } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -23,7 +24,9 @@ export default function AdminDashboard() {
     severity: "medium",
     description: "",
     city: "",
-    state: ""
+    state: "",
+    latitude: 0,
+    longitude: 0 // Optional manual override if needed, else we default below
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -82,17 +85,21 @@ export default function AdminDashboard() {
     const baseLng = 77.2090;
     const randomOffset = () => (Math.random() - 0.5) * 0.1;
 
+    // Use form provided lat/long if non-zero (future proofing), else default logic
+    const finalLat = formData.latitude || (baseLat + randomOffset());
+    const finalLng = formData.longitude || (baseLng + randomOffset());
+
     await createOfficialAlert({
       title: formData.title,
       severity: formData.severity,
-      lat: baseLat + randomOffset(),
-      lng: baseLng + randomOffset(),
+      latitude: finalLat,
+      longitude: finalLng,
       city: formData.city,
       state: formData.state,
       description: formData.description
     });
 
-    setFormData({ title: "", severity: "medium", description: "", city: "", state: "" });
+    setFormData({ title: "", severity: "medium", description: "", city: "", state: "", latitude: 0, longitude: 0 });
     setIsSubmitting(false);
     alert("Official Alert Broadcasted");
     loadData(); // Refresh active list
@@ -241,6 +248,7 @@ export default function AdminDashboard() {
                                         <SeverityBadge severity={alert.severity} />
                                         <span className="text-xs text-slate-400 font-medium">
                                             {alert.city || 'Unknown City'}, {alert.state || 'Unknown State'}
+                                            {(alert.latitude && alert.longitude) ? ` [${alert.latitude.toFixed(2)}, ${alert.longitude.toFixed(2)}]` : ""}
                                         </span>
                                     </div>
                                     <h3 className="font-bold text-slate-900 truncate">{alert.title}</h3>
@@ -299,7 +307,7 @@ export default function AdminDashboard() {
                                     <td className="p-4 text-slate-500 font-medium">
                                         {alert.city
                                           ? `${alert.city}, ${alert.state || ""}`
-                                          : `${alert.latitude.toFixed(2)}, ${alert.longitude.toFixed(2)}`}
+                                          : `${alert.latitude?.toFixed(2) || 0}, ${alert.longitude?.toFixed(2) || 0}`}
                                     </td>
                                     <td className="p-4 text-right">
                                         <button onClick={() => handleDelete(alert.id)} className="text-slate-300 hover:text-red-600 transition-colors p-2" title="Delete Alert">

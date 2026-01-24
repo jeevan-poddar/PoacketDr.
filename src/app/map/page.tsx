@@ -369,7 +369,7 @@ export default function MapPage() {
               {alerts.map((alert) => (
                 <div 
                   key={alert.id}
-                  onClick={() => setFocusedLocation({ lat: alert.lat, lon: alert.lng })}
+                  onClick={() => setFocusedLocation({ lat: alert.latitude, lon: alert.longitude })}
                   className={`p-3 rounded-xl border-l-4 cursor-pointer transition-all hover:shadow-md ${
                     alert.severity === "high" 
                       ? "bg-red-50 border-red-500 hover:bg-red-100" 

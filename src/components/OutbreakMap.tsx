@@ -5,7 +5,7 @@ import { MapContainer, TileLayer, CircleMarker, Popup, Circle, Marker, useMap } 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Alert, getAlerts, reportAlert } from "@/app/actions/alerts";
-import { AlertTriangle, MapPin, Plus, X, Ambulance, ShieldAlert } from "lucide-react";
+import { MapPin, Plus, X, Ambulance, ShieldAlert } from "lucide-react";
 
 // Fix for default marker icon in Leaflet
 const iconUrl = "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png";
@@ -45,7 +45,7 @@ function MapController({ center }: { center: [number, number] }) {
 
 export default function OutbreakMap({ alerts: initialAlerts, userLocation, focusLocation }: OutbreakMapProps) {
   const [alerts, setAlerts] = useState<Alert[]>(initialAlerts || []);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([22.5937, 78.9629]); // India default
+  const [mapCenter, setMapCenter] = useState<[number, number]>([20.5937, 78.9629]); // India default
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
   
@@ -87,8 +87,8 @@ export default function OutbreakMap({ alerts: initialAlerts, userLocation, focus
       title: formData.title,
       description: formData.description || "Reported via Outbreak Alert System",
       // Use map center or user location for the report
-      lat: userLocation?.lat || mapCenter[0], 
-      lng: userLocation?.lon || mapCenter[1],
+      latitude: userLocation?.lat || mapCenter[0], 
+      longitude: userLocation?.lon || mapCenter[1],
       severity: formData.severity as "high" | "medium" | "low",
       radius: 5 // default radius
     };
@@ -106,8 +106,8 @@ export default function OutbreakMap({ alerts: initialAlerts, userLocation, focus
     await reportAlert({
       title: newAlert.title,
       severity: newAlert.severity,
-      lat: newAlert.lat,
-      lng: newAlert.lng,
+      latitude: newAlert.latitude,
+      longitude: newAlert.longitude,
       description: newAlert.description,
       city: formData.city,
       state: formData.state
@@ -152,7 +152,7 @@ export default function OutbreakMap({ alerts: initialAlerts, userLocation, focus
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl shadow-inner border border-slate-200">
       <MapContainer
-        center={[22.5937, 78.9629]}
+        center={[20.5937, 78.9629]}
         zoom={5}
         scrollWheelZoom={true} // Enabled for interactivity
         className="h-full w-full z-0"
@@ -179,8 +179,8 @@ export default function OutbreakMap({ alerts: initialAlerts, userLocation, focus
         {/* Alerts */}
         {alerts.map((alert) => {
           // Safety Check: Strict Casting & Validation
-          const lat = Number(alert.lat);
-          const lng = Number(alert.lng);
+          const lat = Number(alert.latitude);
+          const lng = Number(alert.longitude);
           
           // Strict check: Must be non-zero (unless 0,0 is valid, but usually implies default/missing for this app) and valid numbers
           // Also explicitly checking for 0 because sometimes that's the default "missing" value in DBs
@@ -196,7 +196,7 @@ export default function OutbreakMap({ alerts: initialAlerts, userLocation, focus
               {/* Radius Circle */}
               <Circle
                 center={[lat, lng]}
-                radius={(alert.radius || 10) * 8000}
+                radius={alert.radius || 500}
                 pathOptions={{
                   color: styles.circle.color,
                   fillColor: styles.circle.fillColor,
