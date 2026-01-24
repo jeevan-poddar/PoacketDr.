@@ -12,7 +12,7 @@ export default function Sidebar() {
 
   const links = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/chat', label: 'Medical Chat', icon: MessageSquare },
+    { href: '/chat', label: 'Talk to Aiva', icon: MessageSquare },
     { href: '/vaccinations', label: 'Vaccinations', icon: Syringe },
     { href: '/map', label: 'Outbreak Map', icon: Map },
     { href: '/profile', label: 'My Profile', icon: User },

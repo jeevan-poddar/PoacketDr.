@@ -89,41 +89,87 @@ export async function getVaccinations(userId: string) {
 
 export async function addVaccination(formData: FormData) {
   const name = formData.get("name") as string;
-  const date_administered = formData.get("date_administered") as string;
-  const next_due_date = formData.get("next_due_date") as string;
-  const status = formData.get("status") as "completed" | "upcoming" | "overdue";
+  const date_administered_raw = formData.get("date_administered") as string;
+  const next_due_date_raw = formData.get("next_due_date") as string;
   const notes = formData.get("notes") as string;
   const user_id = formData.get("user_id") as string;
 
+
   if (!user_id) {
-      return { error: "User ID missing" };
+      return { success: false, message: "User ID missing" };
   }
 
   try {
-    const { error } = await (supabase
-      .from("vaccinations") as any)
-      .insert({
-        user_id,
-        name,
-        date_administered: date_administered || null,
-        next_due_date: next_due_date || null,
-        status,
-        notes: notes || null,
-      });
+      // Parse dates
+      const givenDate = new Date(date_administered_raw);
+      const dueDate = new Date(next_due_date_raw);
+      const today = new Date();
+      
+      // Normalization
+      today.setHours(0, 0, 0, 0);
+      givenDate.setHours(0, 0, 0, 0);
+      dueDate.setHours(0, 0, 0, 0);
 
-    if (error) throw error;
+      let status: "completed" | "pending" | "overdue" | "upcoming" = "pending";
 
-    revalidatePath("/vaccinations");
-    return { success: true };
+      // 1. If Given Date is in the Future -> UPCOMING
+      if (givenDate > today) {
+          status = 'upcoming';
+      }
+      // 2. If Due Date is in the Past -> OVERDUE
+      else if (dueDate < today) {
+          status = 'overdue';
+      }
+      // 3. Everything else -> PENDING
+      else {
+          status = 'pending';
+      }
+
+      const { error } = await (supabase
+        .from("vaccinations") as any)
+        .insert({
+          user_id,
+          name,
+          date_administered: date_administered_raw,
+          next_due_date: next_due_date_raw,
+          status,
+          notes: notes || null,
+        });
+
+      if (error) throw error;
+
+      revalidatePath("/vaccinations");
+      return { success: true };
+
   } catch (error: any) {
     if (error.message?.includes("fetch failed") || error.message?.includes("timeout") || error.status === 504) {
         console.warn("Network Timeout - Simulating Success for Demo");
-        // Optimistic success
         return { success: true };
     }
     console.error("Error adding vaccination:", error);
-    return { error: error.message || "Failed to add" };
+    return { success: false, message: error.message || "Database error" };
   }
+}
+
+export async function markAsDone(id: string) {
+    const now = new Date().toISOString();
+    
+    // We update status to completed AND set the administered date to now
+    const { error } = await (supabase
+      .from("vaccinations") as any)
+      .update({ 
+          status: "completed",
+          date_administered: now
+      })
+      .eq("id", id);
+  
+    if (error) {
+      console.error("Error marking vaccination as done:", error);
+      return { error: error.message };
+    }
+  
+    revalidatePath("/vaccinations");
+    return { success: true };
 }
 
 export async function deleteVaccination(id: string) {
@@ -144,7 +190,7 @@ export async function deleteVaccination(id: string) {
 }
 
 export async function updateVaccination(id: string, updates: { 
-  status?: "completed" | "upcoming" | "overdue"; 
+  status?: "completed" | "pending" | "overdue" | "upcoming"; 
   notes?: string; 
   next_due_date?: string | null; 
 }) {

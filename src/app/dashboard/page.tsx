@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthProvider";
-import { Activity, ShieldAlert, User, Syringe, MapPin, MessageSquare, Heart, TrendingUp, Calendar } from "lucide-react";
+import { Activity, ShieldAlert, User, Syringe, MapPin, MessageSquare, Heart, Calendar } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { getAlerts } from "@/app/actions/alerts";
@@ -12,12 +12,10 @@ export default function DashboardPage() {
     vaccineCount: number;
     outbreakCount: number;
     nextDue: string | null;
-    healthScore: number;
   }>({
     vaccineCount: 0,
     outbreakCount: 0,
-    nextDue: "Loading...",
-    healthScore: 92
+    nextDue: "Loading..."
   });
   const [loading, setLoading] = useState(true);
 
@@ -32,7 +30,6 @@ export default function DashboardPage() {
         vaccineCount: 0,
         outbreakCount: 0,
         nextDue: null as string | null,
-        healthScore: 92,
       };
 
       try {
@@ -104,18 +101,13 @@ export default function DashboardPage() {
             </div>
           </div>
           
-          <div className="grid grid-cols-3 gap-4 mt-6">
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-              <p className="text-white/70 text-sm">Health Score</p>
-              <p className="text-2xl font-bold mt-1">{stats.healthScore}%</p>
-              <TrendingUp className="w-4 h-4 mt-2 text-green-300" />
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+          <div className="grid grid-cols-2 gap-4 mt-6">
+            <Link href="/map" className="bg-white/10 backdrop-blur-sm rounded-xl p-4 hover:bg-white/20 transition-colors cursor-pointer">
               <p className="text-white/70 text-sm">Active Outbreaks</p>
               <p className="text-2xl font-bold mt-1">{stats.outbreakCount}</p>
               <p className="text-[10px] text-white/50 mt-1">Verified Alerts</p>
               <ShieldAlert className="w-4 h-4 mt-2 text-yellow-300" />
-            </div>
+            </Link>
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
               <p className="text-white/70 text-sm">Immunization</p>
               <p className="text-2xl font-bold mt-1">{stats.vaccineCount}</p>
@@ -134,7 +126,7 @@ export default function DashboardPage() {
             <div className="w-14 h-14 bg-gradient-to-br from-[#2db3a0] to-[#00509d] rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-teal-200">
               <MessageSquare className="w-7 h-7 text-white" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800">AI Doctor Chat</h3>
+            <h3 className="text-lg font-bold text-slate-800">Talk to Aiva</h3>
             <p className="text-slate-500 text-sm mt-1">Get instant health advice from our AI assistant</p>
           </div>
         </Link>
@@ -153,7 +145,7 @@ export default function DashboardPage() {
         </Link>
         
         {/* Card 3: Map */}
-        <Link href="/outbreak-map" className="group">
+        <Link href="/map" className="group">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-xl hover:scale-[1.02] transition-all duration-300">
             <div className="w-14 h-14 bg-gradient-to-br from-red-400 to-red-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-red-200">
               <MapPin className="w-7 h-7 text-white" />

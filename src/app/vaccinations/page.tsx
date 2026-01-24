@@ -12,7 +12,7 @@ interface Vaccination {
   name: string;
   date_administered: string | null;
   next_due_date: string | null;
-  status: "completed" | "upcoming" | "overdue";
+  status: "completed" | "pending" | "overdue" | "upcoming";
   notes: string | null;
 }
 

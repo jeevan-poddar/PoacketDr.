@@ -84,7 +84,7 @@ export default function ChatPage() {
             <Bot className="w-6 h-6 text-blue-600 dark:text-blue-300" />
           </div>
           <div>
-            <h1 className="font-semibold text-lg text-gray-800 dark:text-white">AI Assistant</h1>
+            <h1 className="font-semibold text-lg text-gray-800 dark:text-white">Talk to Aiva</h1>
             <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
               Online
@@ -99,7 +99,7 @@ export default function ChatPage() {
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-64 text-center text-gray-500 space-y-4">
               <Bot className="w-12 h-12 opacity-20" />
-              <p>Start a conversation with your AI Assistant!</p>
+              <p>Start a conversation with Aiva!</p>
             </div>
           )}
 
@@ -151,7 +151,7 @@ export default function ChatPage() {
               </div>
               <div className="bg-white dark:bg-gray-800 px-4 py-3 rounded-2xl rounded-tl-none border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-                <span className="text-sm text-gray-500">Thinking...</span>
+                <span className="text-sm text-gray-500">Aiva is thinking...</span>
               </div>
             </div>
           )}
@@ -168,7 +168,7 @@ export default function ChatPage() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message..."
+              placeholder="Ask Aiva anything about your health..."
               className="w-full pl-4 pr-12 py-3.5 bg-gray-100 dark:bg-gray-900 border-transparent focus:bg-white dark:focus:bg-gray-800 border focus:border-blue-500 rounded-xl outline-none transition-all text-gray-800 dark:text-gray-100 placeholder-gray-500"
               disabled={isLoading}
             />

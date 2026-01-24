@@ -4,37 +4,28 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
-import { Plus, Trash2, Calendar, CheckCircle2, AlertCircle, Clock, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Calendar, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { addVaccination, deleteVaccination, markAsDone } from "@/app/actions/vaccinations";
 
 interface Vaccination {
   id: string;
   name: string;
   date_administered: string | null;
   next_due_date: string | null;
-  status: "completed" | "upcoming" | "overdue";
+  status: "completed" | "pending" | "overdue" | "upcoming";
   notes: string | null;
 }
 
 const COMMON_VACCINES = [
-  "Influenza (Flu)",
-  "COVID-19",
-  "Tetanus, Diphtheria, Pertussis (Tdap)",
-  "Measles, Mumps, Rubella (MMR)",
-  "Varicella (Chickenpox)",
-  "Hepatitis A",
   "Hepatitis B",
-  "Human Papillomavirus (HPV)",
-  "Pneumococcal",
-  "Meningococcal",
-  "Zoster (Shingles)",
   "Polio",
-  "Haemophilus influenzae type b (Hib)",
-  "Rotavirus",
+  "DTP",
+  "MMR",
+  "Influenza",
+  "COVID-19",
   "Typhoid",
-  "Yellow Fever",
-  "Japanese Encephalitis",
-  "Rabies",
-  "Cholera"
+  "Tetanus",
+  "Chickenpox"
 ];
 
 export default function VaccinationList({ initialData }: { initialData: Vaccination[] }) {
@@ -44,81 +35,40 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Autocomplete state
-  const [vaccineName, setVaccineName] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [filteredVaccines, setFilteredVaccines] = useState<string[]>([]);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
-
+  // State for form fields
+  // Using native HTML datalist so no complex autocomplete state needed for name
+  
   // Sync state when server data updates (after revalidatePath)
   useEffect(() => {
     setVaccinations(initialData);
   }, [initialData]);
 
-  // Handle outside click for autocomplete
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   const handleDelete = async (id: string) => {
     setVaccinations(prev => prev.filter(v => v.id !== id)); // Optimistic delete
     
     try {
-      const { error } = await (supabase
-        .from("vaccinations") as any)
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
+      const result = await deleteVaccination(id);
+      if (result && (result as any).error) throw new Error((result as any).error);
     } catch (error: any) {
       alert("Delete failed: " + (error?.message || "Unknown error"));
-      router.refresh();
-      // Since we optimistically deleted, the refresh should bring it back if the server delete failed.
+      router.refresh(); // Or revert state
+      setVaccinations(initialData);
     }
   };
 
   const handleMarkComplete = async (id: string) => {
       // Optimistic Update
       setVaccinations(prev => prev.map(v => 
-          v.id === id ? { ...v, status: "completed" as const } : v
+          v.id === id ? { ...v, status: "completed" as const, date_administered: new Date().toISOString() } : v
       ));
 
-      const { error } = await (supabase
-        .from("vaccinations") as any)
-        .update({ status: "completed" })
-        .eq("id", id);
-
-      if (error) {
-        alert("Update failed: " + error.message);
-        router.refresh();
+      try {
+          const result = await markAsDone(id);
+          if (result && result.error) throw new Error(result.error);
+      } catch (error: any) {
+          alert("Update failed: " + error.message);
+          setVaccinations(initialData); // Revert
       }
-  };
-
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setVaccineName(value);
-    
-    if (value.trim()) {
-      const filtered = COMMON_VACCINES.filter(v => 
-        v.toLowerCase().includes(value.toLowerCase())
-      );
-      setFilteredVaccines(filtered);
-      setShowSuggestions(true);
-    } else {
-      setFilteredVaccines([]);
-      setShowSuggestions(false);
-    }
-  };
-
-  const handleSelectSuggestion = (name: string) => {
-    setVaccineName(name);
-    setShowSuggestions(false);
   };
 
   const handleAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -128,17 +78,42 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
     setIsSubmitting(true);
     const form = e.currentTarget;
     const formData = new FormData(form);
-    // Override name with state value
-    formData.set("name", vaccineName);
-    formData.append("user_id", user.id);
+    
+    // Calculate status optimistically for UI
+    const dateAdministeredRaw = formData.get("date_administered") as string;
+    const nextDueDateRaw = formData.get("next_due_date") as string;
+    
+    const givenDate = new Date(dateAdministeredRaw);
+    const dueDate = new Date(nextDueDateRaw);
+    const today = new Date();
+    
+    // Normalization
+    today.setHours(0, 0, 0, 0);
+    givenDate.setHours(0, 0, 0, 0);
+    dueDate.setHours(0, 0, 0, 0);
+
+    let simulatedStatus: Vaccination["status"] = "pending";
+
+    // 1. If Given Date is in the Future -> UPCOMING
+    if (givenDate > today) {
+        simulatedStatus = 'upcoming';
+    }
+    // 2. If Due Date is in the Past -> OVERDUE
+    else if (dueDate < today) {
+        simulatedStatus = 'overdue';
+    }
+    // 3. Everything else -> PENDING
+    else {
+        simulatedStatus = 'pending';
+    }
 
     // Optimistic Add
     const newVax: Vaccination = {
-        id: Math.random().toString(), // Temp ID
-        name: vaccineName,
-        date_administered: formData.get("date_administered") as string || null,
-        next_due_date: formData.get("next_due_date") as string || null,
-        status: formData.get("status") as any,
+        id: crypto.randomUUID(), // Use proper UUID to avoid delete errors
+        name: formData.get("name") as string,
+        date_administered: dateAdministeredRaw || null,
+        next_due_date: nextDueDateRaw || null,
+        status: simulatedStatus,
         notes: formData.get("notes") as string || null,
     };
     
@@ -146,48 +121,34 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
     setIsAddOpen(false);
 
     try {
-      const { error } = await (supabase
-        .from("vaccinations") as any)
-        .insert({
-          user_id: user.id,
-          name: vaccineName,
-          date_administered: formData.get("date_administered") as string || null,
-          next_due_date: formData.get("next_due_date") as string || null,
-          status: formData.get("status") as any,
-          notes: formData.get("notes") as string || null,
-        });
+        formData.append("user_id", user.id);
+        const result = await addVaccination(formData);
 
-      if (error) {
-        throw error;
-      }
+        if (!result.success) {
+            throw new Error(result.message || "Failed to add");
+        }
 
-      form.reset();
-      router.refresh();
+       form.reset();
+       // router.refresh(); // Let the action revalidate
     } catch (error: any) {
       alert("Error adding vaccination: " + (error?.message || "Unknown error"));
-      setVaccinations(initialData);
+      setVaccinations(initialData); // Revert
     } finally {
       setIsSubmitting(false);
-      setVaccineName(""); // Reset name
     }
   };
 
-  const getStatusBadge = (status: string, dueDate: string | null) => {
+
+  const getStatusBadge = (status: string) => {
       switch(status) {
           case 'completed':
               return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"><CheckCircle2 size={12}/> Completed</span>;
           case 'overdue':
               return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"><AlertCircle size={12}/> Overdue</span>;
+          case 'pending':
+               return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800"><Clock size={12}/> Pending</span>;
+          case 'upcoming':
           default:
-               if (dueDate) {
-                   const due = new Date(dueDate);
-                   const today = new Date();
-                   const diffTime = due.getTime() - today.getTime();
-                   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                   if (diffDays <= 30 && diffDays >= 0) {
-                       return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800"><Clock size={12}/> Due Soon</span>;
-                   }
-               }
                return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"><Calendar size={12}/> Upcoming</span>;
       }
   };
@@ -218,10 +179,10 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
                 <div className="flex justify-between items-start mb-3">
                     <div>
                         <h3 className="font-semibold text-slate-800 text-lg">{vax.name}</h3>
-                        <div className="mt-1">{getStatusBadge(vax.status, vax.next_due_date)}</div>
+                        <div className="mt-1">{getStatusBadge(vax.status)}</div>
                     </div>
                     <div className="flex gap-2">
-                        {vax.status === 'upcoming' && (
+                        {vax.status !== 'completed' && (
                              <button
                                 onClick={() => handleMarkComplete(vax.id)}
                                 title="Mark as Completed"
@@ -274,81 +235,46 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
             </div>
             
             <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
-                <div className="relative" ref={suggestionsRef}>
+                <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Vaccine Name</label>
-                    <div className="relative">
-                      <input 
-                          type="text"
-                          value={vaccineName}
-                          onChange={handleNameChange}
-                          onFocus={() => {
-                            if (vaccineName) setShowSuggestions(true);
-                            else {
-                                setFilteredVaccines(COMMON_VACCINES);
-                                setShowSuggestions(true);
-                            }
-                          }}
-                          required 
-                          placeholder="Search or type vaccine name..."
-                          className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#2db3a0]/20 focus:outline-none"
-                          autoComplete="off"
-                      />
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
-                    </div>
-                    
-                    {/* Autocomplete Suggestions */}
-                    {showSuggestions && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar">
-                        {filteredVaccines.length > 0 ? (
-                          filteredVaccines.map((vax) => (
-                            <button
-                              key={vax}
-                              type="button"
-                              onClick={() => handleSelectSuggestion(vax)}
-                              className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-sm text-slate-700 transition-colors"
-                            >
-                              {vax}
-                            </button>
-                          ))
-                        ) : (
-                          <div className="px-4 py-3 text-sm text-slate-400 italic">
-                            No matches found. You can type a custom name.
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    <input 
+                        list="vaccine-suggestions"
+                        name="name"
+                        type="text"
+                        required 
+                        placeholder="Select or type name..."
+                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#2db3a0]/20 focus:outline-none"
+                        autoComplete="off"
+                    />
+                    <datalist id="vaccine-suggestions">
+                        {COMMON_VACCINES.map((vax) => (
+                            <option key={vax} value={vax} />
+                        ))}
+                    </datalist>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Date Given</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Planned Date</label>
                         <input 
                             name="date_administered" 
                             type="date"
+                            required
                             className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#2db3a0]/20 focus:outline-none"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Next Due</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label>
                         <input 
                             name="next_due_date" 
                             type="date"
+                            required
                             className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#2db3a0]/20 focus:outline-none"
                         />
                     </div>
                 </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                    <select 
-                        name="status" 
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#2db3a0]/20 focus:outline-none"
-                    >
-                        <option value="upcoming">Upcoming</option>
-                        <option value="completed">Completed</option>
-                        <option value="overdue">Overdue</option>
-                    </select>
-                </div>
+                {/* Status selection removed - calculated automatically */}
 
                 <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
