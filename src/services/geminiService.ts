@@ -1,14 +1,12 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+const API_KEY = process.env.GEMINI_API_KEY;
 
-// Models to try
+// Models to try (in order of preference)
 const MODELS_TO_TRY = [
-  "gemini-2.0-flash-lite",
-  "gemini-flash-lite-latest",
   "gemini-2.0-flash",
-  "gemini-flash-latest",
-  "gemini-2.5-flash",
+  "gemini-1.5-pro",
+  "gemini-pro",
 ];
 
 interface UserProfile {

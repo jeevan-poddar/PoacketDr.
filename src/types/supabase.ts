@@ -9,79 +9,147 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      messages: {
-        Row: {
-          id: number
-          created_at: string
-          role: 'user' | 'assistant'
-          content: string
-          session_id?: string | null
-        }
-        Insert: {
-          id?: number
-          created_at?: string
-          role: 'user' | 'assistant'
-          content: string
-          session_id?: string | null
-        }
-        Update: {
-          id?: number
-          created_at?: string
-          role?: 'user' | 'assistant'
-          content?: string
-          session_id?: string | null
-        }
-      }
-      chat_sessions: {
+      profiles: {
         Row: {
           id: string
+          name: string | null
+          email: string | null
+          age: number | null
+          height_cm: number | null
+          weight_kg: number | null
+          gender: string | null
+          blood_type: string | null
+          allergies: string | null
+          medical_conditions: string | null
           created_at: string
-          user_id: string
-          title?: string | null
+          updated_at: string
         }
         Insert: {
-          id?: string
+          id: string
+          name?: string | null
+          email?: string | null
+          age?: number | null
+          height_cm?: number | null
+          weight_kg?: number | null
+          gender?: string | null
+          blood_type?: string | null
+          allergies?: string | null
+          medical_conditions?: string | null
           created_at?: string
-          user_id: string
-          title?: string | null
+          updated_at?: string
         }
         Update: {
           id?: string
+          name?: string | null
+          email?: string | null
+          age?: number | null
+          height_cm?: number | null
+          weight_kg?: number | null
+          gender?: string | null
+          blood_type?: string | null
+          allergies?: string | null
+          medical_conditions?: string | null
           created_at?: string
-          user_id?: string
-          title?: string | null
+          updated_at?: string
+        }
+      }
+      alerts: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          lat: number
+          lng: number
+          severity: 'high' | 'medium' | 'low'
+          radius: number
+          city: string | null
+          state: string | null
+          status: 'pending' | 'verified' | 'rejected'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          lat: number
+          lng: number
+          severity?: 'high' | 'medium' | 'low'
+          radius?: number
+          city?: string | null
+          state?: string | null
+          status?: 'pending' | 'verified' | 'rejected'
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          lat?: number
+          lng?: number
+          severity?: 'high' | 'medium' | 'low'
+          radius?: number
+          city?: string | null
+          state?: string | null
+          status?: 'pending' | 'verified' | 'rejected'
+          created_at?: string
         }
       }
       vaccinations: {
         Row: {
           id: string
-          created_at: string
           user_id: string
           name: string
+          status: 'completed' | 'upcoming' | 'overdue' | null
           date_administered: string | null
           next_due_date: string | null
-          status: 'completed' | 'upcoming' | 'overdue'
+          due_date: string | null
           notes: string | null
+          created_at: string
         }
         Insert: {
           id?: string
-          created_at?: string
           user_id: string
           name: string
+          status?: 'completed' | 'upcoming' | 'overdue' | null
           date_administered?: string | null
           next_due_date?: string | null
-          status?: 'completed' | 'upcoming' | 'overdue'
+          due_date?: string | null
           notes?: string | null
+          created_at?: string
         }
         Update: {
           id?: string
-          created_at?: string
           user_id?: string
           name?: string
+          status?: 'completed' | 'upcoming' | 'overdue' | null
           date_administered?: string | null
           next_due_date?: string | null
-          status?: 'completed' | 'upcoming' | 'overdue'
+          due_date?: string | null
           notes?: string | null
+          created_at?: string
+        }
+      }
+      messages: {
+        Row: {
+          id: string
+          user_id: string | null
+          role: 'user' | 'assistant' | null
+          content: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          role?: 'user' | 'assistant' | null
+          content?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          role?: 'user' | 'assistant' | null
+          content?: string | null
+          created_at?: string
         }
       }
     }

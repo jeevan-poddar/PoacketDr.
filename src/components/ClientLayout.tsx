@@ -7,21 +7,43 @@ import Sidebar from "./Sidebar";
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const pathname = usePathname();
-  
-  // Don't show sidebar on auth pages
-  const isAuthPage = pathname === "/login" || pathname === "/signup";
-  
-  if (loading) {
+
+  const isLoginPage = pathname === "/login";
+  const isPublicRoute =
+    isLoginPage ||
+    pathname === "/signup" ||
+    pathname?.startsWith("/admin");
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user && !isPublicRoute) {
+      window.location.href = "/login";
+      return;
+    }
+
+    if (user && isLoginPage) {
+      window.location.href = "/dashboard";
+    }
+  }, [loading, user, isLoginPage, isPublicRoute]);
+
+  if (isPublicRoute) {
+    if (user) {
+      return (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="w-10 h-10 border-4 border-[#2db3a0] border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+    return <>{children}</>;
+  }
+
+  if (loading || !user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="w-10 h-10 border-4 border-[#2db3a0] border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
-  }
-  
-  // Show auth pages without sidebar
-  if (isAuthPage) {
-    return <>{children}</>;
   }
   
   // Show sidebar for authenticated users

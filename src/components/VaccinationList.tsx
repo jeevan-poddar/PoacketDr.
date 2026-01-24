@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthProvider";
 import { addVaccination, deleteVaccination, toggleVaccinationStatus } from "@/app/actions/vaccinations";
-import { Plus, Trash2, Calendar, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { Plus, Trash2, Calendar, CheckCircle2, AlertCircle, Clock, ChevronDown } from "lucide-react";
 
 interface Vaccination {
   id: string;
@@ -15,17 +15,56 @@ interface Vaccination {
   notes: string | null;
 }
 
+const COMMON_VACCINES = [
+  "Influenza (Flu)",
+  "COVID-19",
+  "Tetanus, Diphtheria, Pertussis (Tdap)",
+  "Measles, Mumps, Rubella (MMR)",
+  "Varicella (Chickenpox)",
+  "Hepatitis A",
+  "Hepatitis B",
+  "Human Papillomavirus (HPV)",
+  "Pneumococcal",
+  "Meningococcal",
+  "Zoster (Shingles)",
+  "Polio",
+  "Haemophilus influenzae type b (Hib)",
+  "Rotavirus",
+  "Typhoid",
+  "Yellow Fever",
+  "Japanese Encephalitis",
+  "Rabies",
+  "Cholera"
+];
+
 export default function VaccinationList({ initialData }: { initialData: Vaccination[] }) {
   const { user } = useAuth();
   const router = useRouter();
   const [vaccinations, setVaccinations] = useState<Vaccination[]>(initialData);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Autocomplete state
+  const [vaccineName, setVaccineName] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [filteredVaccines, setFilteredVaccines] = useState<string[]>([]);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   // Sync state when server data updates (after revalidatePath)
   useEffect(() => {
     setVaccinations(initialData);
   }, [initialData]);
+
+  // Handle outside click for autocomplete
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleDelete = async (id: string) => {
     setVaccinations(prev => prev.filter(v => v.id !== id)); // Optimistic delete
@@ -36,8 +75,6 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
         alert("Delete failed");
         router.refresh();
         // Since we optimistically deleted, the refresh should bring it back if the server delete failed.
-        // But to be immediate, we could also revert state here. 
-        // For simplicity as requested: alert + refresh.
     }
   };
 
@@ -50,6 +87,27 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
       await toggleVaccinationStatus(id, "completed");
   };
 
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setVaccineName(value);
+    
+    if (value.trim()) {
+      const filtered = COMMON_VACCINES.filter(v => 
+        v.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredVaccines(filtered);
+      setShowSuggestions(true);
+    } else {
+      setFilteredVaccines([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSelectSuggestion = (name: string) => {
+    setVaccineName(name);
+    setShowSuggestions(false);
+  };
+
   const handleAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!user) return;
@@ -57,12 +115,14 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
     setIsSubmitting(true);
     const form = e.currentTarget;
     const formData = new FormData(form);
+    // Override name with state value
+    formData.set("name", vaccineName);
     formData.append("user_id", user.id);
 
     // Optimistic Add
     const newVax: Vaccination = {
         id: Math.random().toString(), // Temp ID
-        name: formData.get("name") as string,
+        name: vaccineName,
         date_administered: formData.get("date_administered") as string || null,
         next_due_date: formData.get("next_due_date") as string || null,
         status: formData.get("status") as any,
@@ -75,10 +135,10 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
     const result = await addVaccination(formData);
     
     setIsSubmitting(false);
+    setVaccineName(""); // Reset name
     
     if (result.error) {
         alert("Error adding vaccination: " + result.error);
-        // Revert optimistic add if needed, but for demo we assume success or handle generic error
         setVaccinations(initialData); 
     } else {
         form.reset();
@@ -188,14 +248,49 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
             </div>
             
             <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
-                <div>
+                <div className="relative" ref={suggestionsRef}>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Vaccine Name</label>
-                    <input 
-                        name="name" 
-                        required 
-                        placeholder="e.g. Flu Shot, Tetanus"
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#2db3a0]/20 focus:outline-none"
-                    />
+                    <div className="relative">
+                      <input 
+                          type="text"
+                          value={vaccineName}
+                          onChange={handleNameChange}
+                          onFocus={() => {
+                            if (vaccineName) setShowSuggestions(true);
+                            else {
+                                setFilteredVaccines(COMMON_VACCINES);
+                                setShowSuggestions(true);
+                            }
+                          }}
+                          required 
+                          placeholder="Search or type vaccine name..."
+                          className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#2db3a0]/20 focus:outline-none"
+                          autoComplete="off"
+                      />
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                    </div>
+                    
+                    {/* Autocomplete Suggestions */}
+                    {showSuggestions && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar">
+                        {filteredVaccines.length > 0 ? (
+                          filteredVaccines.map((vax) => (
+                            <button
+                              key={vax}
+                              type="button"
+                              onClick={() => handleSelectSuggestion(vax)}
+                              className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-sm text-slate-700 transition-colors"
+                            >
+                              {vax}
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-4 py-3 text-sm text-slate-400 italic">
+                            No matches found. You can type a custom name.
+                          </div>
+                        )}
+                      </div>
+                    )}
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">

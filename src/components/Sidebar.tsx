@@ -1,12 +1,11 @@
 "use client";
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { LayoutDashboard, MessageSquare, Syringe, Map, User, LogOut } from 'lucide-react';
 import { useAuth } from '@/context/AuthProvider';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { profile, signOut, user } = useAuth();
 
   if (pathname?.startsWith('/admin')) return null;
@@ -24,12 +23,11 @@ export default function Sidebar() {
     try {
       await signOut();
       console.log("Sign out successful, redirecting...");
-      router.push('/login');
-      router.refresh(); // Force refresh to clear any cached auth state
     } catch (error) {
-      console.error("Logout failed:", error);
-      // Force redirect anyway to prevent being stuck
-      router.push('/login');
+      console.error("Logout error (continuing anyway):", error);
+    } finally {
+      // Always redirect regardless of success/failure
+      window.location.href = '/login';
     }
   }
 

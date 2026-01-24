@@ -25,6 +25,10 @@ drop policy if exists "Public profiles are viewable by everyone" on public.profi
 create policy "Public profiles are viewable by everyone" on public.profiles
   for select using (true);
 
+drop policy if exists "Users can insert own profile" on public.profiles;
+create policy "Users can insert own profile" on public.profiles
+  for insert with check (auth.uid() = id);
+
 drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile" on public.profiles
   for update using (auth.uid() = id);

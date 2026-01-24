@@ -53,13 +53,17 @@ export default function ChatPage() {
         }),
       });
 
+      const data = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
-        console.error('Server reported error:', errorData);
-        throw new Error(errorData.error || 'Failed to send message');
+        // Handle rate limit gracefully
+        if (response.status === 429 && data.text) {
+          setMessages((prev) => [...prev, { role: 'model', parts: data.text }]);
+          return;
+        }
+        throw new Error(data.error || 'Failed to send message');
       }
 
-      const data = await response.json();
       setMessages((prev) => [...prev, { role: 'model', parts: data.text }]);
     } catch (error: any) {
       console.error('Error sending message:', error);

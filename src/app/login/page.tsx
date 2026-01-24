@@ -76,15 +76,31 @@ export default function LoginPage() {
 
     setLoading(true);
 
-    const { error } = await signIn(email, password);
-    
-    if (error) {
-      setError(error.message);
-      setFieldErrors({ email: true, password: true });
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      setLoading(false);
+      setError("Connection timed out. Please try again.");
+      setShake(true);
+    }, 10000);
+
+    try {
+      const { error } = await signIn(email, password);
+      clearTimeout(timeoutId);
+      
+      if (error) {
+        setError(error.message);
+        setFieldErrors({ email: true, password: true });
+        setShake(true);
+        setLoading(false);
+      } else {
+        // Success - redirect (keep loading state for smooth transition)
+        window.location.href = "/dashboard";
+      }
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      setError(err.message || "An unexpected error occurred");
       setShake(true);
       setLoading(false);
-    } else {
-      router.push("/dashboard");
     }
   }
 
