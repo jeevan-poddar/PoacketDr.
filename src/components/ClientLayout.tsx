@@ -9,10 +9,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname();
 
   const isLoginPage = pathname === "/login";
-  const isPublicRoute =
-    isLoginPage ||
-    pathname === "/signup" ||
-    pathname?.startsWith("/admin");
+  const isSignupPage = pathname === "/signup";
+  const isAuthPage = isLoginPage || isSignupPage;
+  const isAdminRoute = pathname?.startsWith("/admin");
+  const isPublicRoute = isAuthPage || isAdminRoute;
 
   useEffect(() => {
     if (loading) return;
@@ -22,13 +22,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       return;
     }
 
-    if (user && isLoginPage) {
+    if (user && isAuthPage) {
       window.location.href = "/dashboard";
     }
-  }, [loading, user, isLoginPage, isPublicRoute]);
+  }, [loading, user, isAuthPage, isPublicRoute]);
 
   if (isPublicRoute) {
-    if (user) {
+    if (user && isAuthPage) {
       return (
         <div className="flex items-center justify-center min-h-screen">
           <div className="w-10 h-10 border-4 border-[#2db3a0] border-t-transparent rounded-full animate-spin"></div>

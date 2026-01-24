@@ -297,7 +297,9 @@ export default function AdminDashboard() {
                                         <div className="md:hidden mt-1 text-xs font-normal text-slate-400">{alert.description}</div>
                                     </td>
                                     <td className="p-4 text-slate-500 font-medium">
-                                        {alert.city ? `${alert.city}, ${alert.state || ''}` : "Unknown Location"}
+                                        {alert.city
+                                          ? `${alert.city}, ${alert.state || ""}`
+                                          : `${alert.latitude.toFixed(2)}, ${alert.longitude.toFixed(2)}`}
                                     </td>
                                     <td className="p-4 text-right">
                                         <button onClick={() => handleDelete(alert.id)} className="text-slate-300 hover:text-red-600 transition-colors p-2" title="Delete Alert">

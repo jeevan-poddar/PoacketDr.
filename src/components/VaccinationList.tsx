@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthProvider";
-import { addVaccination, deleteVaccination, toggleVaccinationStatus } from "@/app/actions/vaccinations";
+import { supabase } from "@/lib/supabaseClient";
 import { Plus, Trash2, Calendar, CheckCircle2, AlertCircle, Clock, ChevronDown } from "lucide-react";
 
 interface Vaccination {
@@ -70,11 +70,16 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
     setVaccinations(prev => prev.filter(v => v.id !== id)); // Optimistic delete
     
     try {
-        await deleteVaccination(id);
-    } catch (error) {
-        alert("Delete failed");
-        router.refresh();
-        // Since we optimistically deleted, the refresh should bring it back if the server delete failed.
+      const { error } = await (supabase
+        .from("vaccinations") as any)
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+    } catch (error: any) {
+      alert("Delete failed: " + (error?.message || "Unknown error"));
+      router.refresh();
+      // Since we optimistically deleted, the refresh should bring it back if the server delete failed.
     }
   };
 
@@ -84,7 +89,15 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
           v.id === id ? { ...v, status: "completed" as const } : v
       ));
 
-      await toggleVaccinationStatus(id, "completed");
+      const { error } = await (supabase
+        .from("vaccinations") as any)
+        .update({ status: "completed" })
+        .eq("id", id);
+
+      if (error) {
+        alert("Update failed: " + error.message);
+        router.refresh();
+      }
   };
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -132,17 +145,30 @@ export default function VaccinationList({ initialData }: { initialData: Vaccinat
     setVaccinations(prev => [...prev, newVax]);
     setIsAddOpen(false);
 
-    const result = await addVaccination(formData);
-    
-    setIsSubmitting(false);
-    setVaccineName(""); // Reset name
-    
-    if (result.error) {
-        alert("Error adding vaccination: " + result.error);
-        setVaccinations(initialData); 
-    } else {
-        form.reset();
-        router.refresh();
+    try {
+      const { error } = await (supabase
+        .from("vaccinations") as any)
+        .insert({
+          user_id: user.id,
+          name: vaccineName,
+          date_administered: formData.get("date_administered") as string || null,
+          next_due_date: formData.get("next_due_date") as string || null,
+          status: formData.get("status") as any,
+          notes: formData.get("notes") as string || null,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      form.reset();
+      router.refresh();
+    } catch (error: any) {
+      alert("Error adding vaccination: " + (error?.message || "Unknown error"));
+      setVaccinations(initialData);
+    } finally {
+      setIsSubmitting(false);
+      setVaccineName(""); // Reset name
     }
   };
 

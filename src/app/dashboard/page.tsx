@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthProvider";
 import { Activity, ShieldAlert, User, Syringe, MapPin, MessageSquare, Heart, TrendingUp, Calendar } from "lucide-react";
 import Link from "next/link";
-import { getDashboardStats } from "@/app/actions/dashboard";
+import { supabase } from "@/lib/supabaseClient";
+import { getAlerts } from "@/app/actions/alerts";
 
 export default function DashboardPage() {
   const { user, profile } = useAuth();
@@ -22,20 +23,66 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function loadStats() {
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      const nextStats = {
+        vaccineCount: 0,
+        outbreakCount: 0,
+        nextDue: null as string | null,
+        healthScore: 92,
+      };
+
       try {
-        const data = await getDashboardStats(user.id);
-        setStats(data);
+        // Vaccinations (client-side to preserve auth context)
+        const { data: vaccines, error: vaccineError } = await supabase
+          .from("vaccinations")
+          .select("id,status,next_due_date,due_date")
+          .eq("user_id", user.id)
+          .order("next_due_date", { ascending: true, nullsFirst: true });
+        if (!vaccineError && vaccines) {
+          const pending = vaccines.filter((v: any) => v.status !== "completed");
+          nextStats.vaccineCount = pending.length;
+
+          const now = new Date();
+          const upcomingDates = pending
+            .map((v: any) => v.next_due_date || v.due_date)
+            .filter(Boolean)
+            .map((d) => new Date(d as string))
+            .filter((d) => !Number.isNaN(d.getTime()))
+            .filter((d) => d > now)
+            .sort((a, b) => a.getTime() - b.getTime());
+
+          if (upcomingDates.length > 0) {
+            nextStats.nextDue = upcomingDates[0].toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            });
+          } else if (vaccines.length > 0 && pending.length === 0) {
+            nextStats.nextDue = "All caught up!";
+          } else if (vaccines.length === 0) {
+            nextStats.nextDue = "No vaccines tracked";
+          } else {
+            nextStats.nextDue = "No due date set";
+          }
+        }
+
+        // Alerts (use same source as map; includes demo fallback)
+        const alerts = await getAlerts();
+        nextStats.outbreakCount = Array.isArray(alerts) ? alerts.length : 0;
+
+        setStats(nextStats);
       } catch (e) {
         console.error("Failed to load dashboard stats", e);
       } finally {
         setLoading(false);
       }
     }
-    
-    if (user) {
-      loadStats();
-    }
+
+    loadStats();
   }, [user]);
 
   return (

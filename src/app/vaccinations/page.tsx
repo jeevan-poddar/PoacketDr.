@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthProvider";
-import { getVaccinations } from "@/app/actions/vaccinations";
+import { supabase } from "@/lib/supabaseClient";
 import VaccinationList from "@/components/VaccinationList";
 import { Shield } from "lucide-react";
 
@@ -28,9 +28,25 @@ export default function VaccinationsPage() {
         router.push("/login");
       } else {
         const fetchData = async () => {
-             const data = await getVaccinations(user.id);
-             setVaccinations(data as Vaccination[]); // Cast safely as server action returns strict types
-             setLoading(false);
+          try {
+            const { data, error } = await supabase
+              .from("vaccinations")
+              .select("*")
+              .eq("user_id", user.id)
+              .order("next_due_date", { ascending: true, nullsFirst: true });
+
+            if (error) {
+              console.error("Error fetching vaccinations:", error);
+              setVaccinations([]);
+            } else {
+              setVaccinations((data as Vaccination[]) || []);
+            }
+          } catch (err) {
+            console.error("Error fetching vaccinations:", err);
+            setVaccinations([]);
+          } finally {
+            setLoading(false);
+          }
         };
         fetchData();
       }

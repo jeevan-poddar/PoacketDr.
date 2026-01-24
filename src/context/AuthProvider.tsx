@@ -225,8 +225,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       setSession(null);
       
-      // Then sign out from Supabase
-      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      // Then sign out from Supabase (global to revoke refresh token)
+      const { error } = await supabase.auth.signOut();
       if (error) {
         console.error("Error signing out:", error);
         throw error;
@@ -239,6 +239,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       setSession(null);
       throw error;
+    } finally {
+      // Hard clear any persisted session to prevent stale login
+      try {
+        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (url) {
+          const ref = new URL(url).hostname.split(".")[0];
+          const storageKey = `sb-${ref}-auth-token`;
+          localStorage.removeItem(storageKey);
+          sessionStorage.removeItem(storageKey);
+        }
+      } catch {
+        // ignore storage cleanup errors
+      }
     }
   }
 

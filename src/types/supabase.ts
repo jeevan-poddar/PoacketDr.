@@ -153,5 +153,9 @@ export interface Database {
         }
       }
     }
+    Views: {}
+    Functions: {}
+    Enums: {}
+    CompositeTypes: {}
   }
 }

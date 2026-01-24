@@ -1,6 +1,7 @@
 "use server";
 
 import { supabase } from "@/lib/supabaseClient";
+import { DEMO_ALERTS } from "@/lib/demoAlerts";
 import { revalidatePath } from "next/cache";
 
 export interface AdminAlert {
@@ -53,6 +54,26 @@ export async function getAdminData() {
       status: a.status,
       created_at: a.created_at
     })) as AdminAlert[];
+
+    if (alerts.length === 0) {
+      const demo = DEMO_ALERTS.map((a) => ({
+        id: a.id,
+        title: a.title,
+        description: a.description,
+        severity: a.severity,
+        latitude: a.lat,
+        longitude: a.lng,
+        city: a.city || "",
+        state: a.state || "",
+        status: "verified" as const,
+        created_at: new Date().toISOString(),
+      })) as AdminAlert[];
+
+      return {
+        pending: [],
+        active: demo,
+      };
+    }
 
     console.log("Admin Data Fetch:", { 
         total: alerts.length, 

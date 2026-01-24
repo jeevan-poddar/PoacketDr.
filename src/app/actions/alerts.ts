@@ -2,6 +2,7 @@
 
 import { supabase } from "@/lib/supabaseClient";
 import { revalidatePath } from "next/cache";
+import { DEMO_ALERTS } from "@/lib/demoAlerts";
 
 export interface Alert {
   id: string;
@@ -13,98 +14,15 @@ export interface Alert {
   radius?: number; // in km
 }
 
-const DEMO_ALERTS: Alert[] = [
-  {
-    id: "demo-1",
-    title: "Flu Outbreak",
-    description: "High rate of viral influenza cases reported in New Delhi. Hospitals dealing with influx.",
-    lat: 28.6139,
-    lng: 77.2090, 
-    severity: "high",
-    radius: 15
-  },
-  {
-    id: "demo-2", 
-    title: "Dengue Alert",
-    description: "Mosquito-borne viral disease cases rising in Mumbai due to recent rains.",
-    lat: 19.0760,
-    lng: 72.8777,
-    severity: "medium",
-    radius: 12
-  },
-  {
-    id: "demo-3",
-    title: "Malaria Warning",
-    description: "Several cases of Malaria reported in Chennai suburbs.",
-    lat: 13.0827,
-    lng: 80.2707,
-    severity: "high",
-    radius: 10
-  },
-  {
-    id: "demo-4",
-    title: "Water Contamination",
-    description: "Reports of contaminated water supply in parts of Kolkata.",
-    lat: 22.5726,
-    lng: 88.3639,
-    severity: "low",
-    radius: 8
-  },
-  {
-    id: "demo-5",
-    title: "Viral Fever",
-    description: "Seasonal viral fever cases increasing in Bangalore office districts.",
-    lat: 12.9716,
-    lng: 77.5946,
-    severity: "medium",
-    radius: 7
-  },
-  {
-    id: "demo-6",
-    title: "Respiratory Issues",
-    description: "Air quality related respiratory complaints in Hyderabad.",
-    lat: 17.3850,
-    lng: 78.4867,
-    severity: "low",
-    radius: 6
-  },
-  {
-    id: "demo-7",
-    title: "H1N1 Alert",
-    description: "Isolated cases of H1N1 reported in Pune.",
-    lat: 18.5204,
-    lng: 73.8567,
-    severity: "high",
-    radius: 9
-  },
-  {
-    id: "demo-8",
-    title: "Heat Wave",
-    description: "Extreme heat advisory in Ahmedabad. Stay hydrated.",
-    lat: 23.0225,
-    lng: 72.5714,
-    severity: "medium",
-    radius: 20
-  },
-  {
-    id: "demo-9",
-    title: "Food Poisoning",
-    description: "Cluster of food poisoning cases in Jaipur tourist area.",
-    lat: 26.9124,
-    lng: 75.7873,
-    severity: "low",
-    radius: 4
-  },
-  {
-    id: "demo-10",
-    title: "Chikungunya",
-    description: "Chikungunya cases identified in Lucknow.",
-    lat: 26.8467,
-    lng: 80.9462,
-    severity: "high",
-    radius: 11
-  }
-];
+const DEMO_ALERTS_TYPED: Alert[] = DEMO_ALERTS.map((alert) => ({
+  id: alert.id,
+  title: alert.title,
+  description: alert.description,
+  lat: alert.lat,
+  lng: alert.lng,
+  severity: alert.severity,
+  radius: alert.radius,
+}));
 
 export async function getAlerts() {
   try {
@@ -120,7 +38,7 @@ export async function getAlerts() {
 
     if (!alerts || alerts.length === 0) {
       console.log("No verified alerts found, returning demo data.");
-      return DEMO_ALERTS;
+      return DEMO_ALERTS_TYPED;
     }
     
     return alerts.map((a: any) => ({
@@ -136,10 +54,10 @@ export async function getAlerts() {
   } catch (error: any) {
     if (error.message?.includes("fetch failed") || error.message?.includes("timeout") || error.status === 504) {
       console.warn("Network Timeout - Returning Demo Alerts");
-      return DEMO_ALERTS;
+      return DEMO_ALERTS_TYPED;
     }
     console.warn("Values DB fetch failed, using demo data:", error);
-    return DEMO_ALERTS;
+    return DEMO_ALERTS_TYPED;
   }
 }
 
