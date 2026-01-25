@@ -163,10 +163,10 @@ export default function ChatPage() {
 
   return (
     // FIX: Main Container
-    <div className="h-[100dvh] w-full bg-[#F4F1FF] font-sans relative selection:bg-purple-200 overflow-hidden flex flex-col">
+    <div className="h-[100dvh] w-full bg-[#F4F1FF] font-sans relative selection:bg-purple-200  flex flex-col">
 
       {/* --- BACKGROUND ANIMATION --- */}
-      <div className="absolute inset-0 pointer-events-none z-0">
+      {/* <div className="absolute inset-0 pointer-events-none z-0">
         <motion.div
           animate={{ x: [0, 50, 0], y: [0, -50, 0] }}
           transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
@@ -177,7 +177,7 @@ export default function ChatPage() {
           transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
           className="absolute bottom-[-20%] right-[-10%] w-[700px] h-[700px] bg-blue-200/40 rounded-full blur-[120px]"
         />
-      </div>
+      </div> */}
 
       {/* --- HEADER --- */}
       <header className="absolute top-0 left-0 right-0 z-50 p-4 flex justify-between items-center pointer-events-none">
@@ -200,7 +200,7 @@ export default function ChatPage() {
 
       {/* --- CHAT AREA --- */}
       {/* Added pb-32 to ensure content isn't hidden behind the absolute input bar */}
-      <main className="flex-1 w-full z-10 overflow-y-auto pb-32 pt-20 px-4 md:px-0">
+      <main className="flex-1  w-full z-10 overflow-y-auto pb-32 pt-20 px-4 md:px-0">
         <div className="max-w-3xl mx-auto min-h-full flex flex-col">
 
           {messages.length === 0 ? (
