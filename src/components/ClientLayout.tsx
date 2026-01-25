@@ -50,7 +50,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      <main className="flex-1 ml-64 p-8 relative">
+      <main className="flex-1 ml-64 relative">
         {/* Decorative background */}
         <div className="fixed top-0 right-0 w-96 h-96 bg-gradient-to-br from-[#2db3a0]/10 to-[#00509d]/10 rounded-full blur-3xl -z-10"></div>
         <div className="fixed bottom-0 left-64 w-80 h-80 bg-gradient-to-tr from-[#00509d]/10 to-[#2db3a0]/10 rounded-full blur-3xl -z-10"></div>

@@ -1,194 +1,234 @@
-"use client";
-import { useEffect, useState } from "react";
-import { useAuth } from "@/context/AuthProvider";
-import { Activity, ShieldAlert, User, Syringe, MapPin, MessageSquare, Heart, Calendar } from "lucide-react";
-import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
-import { getAlerts } from "@/app/actions/alerts";
+'use client';
+
+import { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+import {
+  MessageSquarePlus, Sparkles, ChevronRight,
+  Activity, Syringe, Bell, Loader2
+} from 'lucide-react';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function DashboardPage() {
-  const { user, profile } = useAuth();
-  const [stats, setStats] = useState<{
-    vaccineCount: number;
-    outbreakCount: number;
-    nextDue: string | null;
-  }>({
-    vaccineCount: 0,
-    outbreakCount: 0,
-    nextDue: "Loading..."
-  });
+  const [userName, setUserName] = useState('Friend'); // Default name
+  const [alertCount, setAlertCount] = useState<number>(0);
+  const [vaccineCount, setVaccineCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
-    async function loadStats() {
+    const fetchData = async () => {
+      // 1. Get Current User
+      const { data: { user } } = await supabase.auth.getUser();
+
       if (!user) {
-        setLoading(false);
+        router.push('/login');
         return;
       }
 
-      const nextStats = {
-        vaccineCount: 0,
-        outbreakCount: 0,
-        nextDue: null as string | null,
-      };
-
       try {
-        // Vaccinations (client-side to preserve auth context)
-        const { data: vaccines, error: vaccineError } = await supabase
-          .from("vaccinations")
-          .select("id,status,next_due_date,due_date")
-          .eq("user_id", user.id)
-          .order("next_due_date", { ascending: true, nullsFirst: true });
-        if (!vaccineError && vaccines) {
-          const pending = vaccines.filter((v: any) => v.status !== "completed");
-          nextStats.vaccineCount = pending.length;
+        // 2. FETCH NAME: Get full_name from 'user_profiles' table
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .single();
 
-          const now = new Date();
-          const upcomingDates = pending
-            .map((v: any) => v.next_due_date || v.due_date)
-            .filter(Boolean)
-            .map((d) => new Date(d as string))
-            .filter((d) => !Number.isNaN(d.getTime()))
-            .filter((d) => d > now)
-            .sort((a, b) => a.getTime() - b.getTime());
-
-          if (upcomingDates.length > 0) {
-            nextStats.nextDue = upcomingDates[0].toLocaleDateString("en-GB", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            });
-          } else if (vaccines.length > 0 && pending.length === 0) {
-            nextStats.nextDue = "All caught up!";
-          } else if (vaccines.length === 0) {
-            nextStats.nextDue = "No vaccines tracked";
-          } else {
-            nextStats.nextDue = "No due date set";
-          }
+        if (profile?.full_name) {
+          // Extract first name
+          setUserName(profile.full_name.split(' ')[0]);
         }
 
-        // Alerts (use same source as map; includes demo fallback)
-        const alerts = await getAlerts();
-        nextStats.outbreakCount = Array.isArray(alerts) ? alerts.length : 0;
+        // 3. REAL DATA: Count Active Alerts
+        const { count: activeAlerts } = await supabase
+          .from('alerts')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'verified');
 
-        setStats(nextStats);
-      } catch (e) {
-        console.error("Failed to load dashboard stats", e);
+        // 4. REAL DATA: Count Pending/Overdue Vaccines
+        const { count: pendingVax } = await supabase
+          .from('vaccinations')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .in('status', ['pending', 'overdue']);
+
+        setAlertCount(activeAlerts || 0);
+        setVaccineCount(pendingVax || 0);
+
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    loadStats();
-  }, [user]);
+    fetchData();
+  }, [router]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#F4F1FF]">
+        <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-8 max-w-6xl">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-[#2db3a0] to-[#00509d] rounded-3xl p-8 text-white relative overflow-hidden">
-        {/* Decorative circles */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/4"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/4"></div>
-        
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-              <Heart className="w-8 h-8" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold">Good Morning, {profile?.name?.split(' ')[0] || "Guest"}! 👋</h1>
-              <p className="text-white/80">Here's your health overview for today</p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4 mt-6">
-            <Link href="/map" className="bg-white/10 backdrop-blur-sm rounded-xl p-4 hover:bg-white/20 transition-colors cursor-pointer">
-              <p className="text-white/70 text-sm">Active Outbreaks</p>
-              <p className="text-2xl font-bold mt-1">{stats.outbreakCount}</p>
-              <p className="text-[10px] text-white/50 mt-1">Verified Alerts</p>
-              <ShieldAlert className="w-4 h-4 mt-2 text-yellow-300" />
-            </Link>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-              <p className="text-white/70 text-sm">Immunization</p>
-              <p className="text-2xl font-bold mt-1">{stats.vaccineCount}</p>
-              <p className="text-[10px] text-white/50 mt-1">Pending</p>
-              <Calendar className="w-4 h-4 mt-2 text-blue-300" />
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Card 1: Chat */}
-        <Link href="/chat" className="group">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-xl hover:scale-[1.02] transition-all duration-300">
-            <div className="w-14 h-14 bg-gradient-to-br from-[#2db3a0] to-[#00509d] rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-teal-200">
-              <MessageSquare className="w-7 h-7 text-white" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-800">Talk to Aiva</h3>
-            <p className="text-slate-500 text-sm mt-1">Get instant health advice from our AI assistant</p>
-          </div>
-        </Link>
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#F4F1FF] font-sans selection:bg-purple-200">
 
-        {/* Card 2: Vaccinations */}
-        <Link href="/vaccinations" className="group">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-xl hover:scale-[1.02] transition-all duration-300">
-            <div className="w-14 h-14 bg-gradient-to-br from-purple-400 to-purple-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-purple-200">
-              <Syringe className="w-7 h-7 text-white" />
+      {/* --- BACKGROUND ANIMATION --- */}
+      <div className="absolute inset-0 pointer-events-none z-0">
+        <motion.div
+          animate={{ x: [0, 50, 0], y: [0, -50, 0] }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-purple-200/40 rounded-full blur-[120px]"
+        />
+        <motion.div
+          animate={{ x: [0, -50, 0], y: [0, 50, 0] }}
+          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+          className="absolute bottom-[-20%] right-[-10%] w-[700px] h-[700px] bg-blue-200/40 rounded-full blur-[120px]"
+        />
+      </div>
+
+      {/* --- CONTENT CONTAINER --- */}
+      <div className="relative z-10 max-w-6xl mx-auto p-6 md:p-12">
+
+        {/* Header */}
+        <header className="flex justify-between items-center mb-12">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-purple-500/20">
+              <Sparkles className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800">Vaccinations</h3>
-            <p className="text-slate-500 text-sm mt-1">
-              {stats.nextDue ? `Next: ${stats.nextDue}` : "All Caught Up!"}
+            <span className="text-xl font-bold text-slate-800 tracking-tight">PocketDr.</span>
+          </div>
+
+          {/* Added Profile Link in Header for easy access */}
+          <Link href="/profile" className="w-10 h-10 rounded-full bg-white border border-purple-100 flex items-center justify-center shadow-sm hover:scale-105 transition-transform text-purple-600 font-bold">
+            {userName.charAt(0)}
+          </Link>
+        </header>
+
+        {/* Hero Section */}
+        <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16 mb-16">
+          {/* Left Text */}
+          <div className="flex-1 space-y-6 text-center md:text-left">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="inline-flex items-center gap-2 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold uppercase tracking-wider"
+            >
+              <Activity className="w-3 h-3" />
+              Health Dashboard
+            </motion.div>
+
+            <h1 className="text-4xl md:text-6xl font-extrabold text-slate-900 leading-tight">
+              Good Morning,<br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600">
+                {userName}
+              </span>
+            </h1>
+
+            <p className="text-lg text-slate-500 max-w-lg mx-auto md:mx-0">
+              Your vitals are looking good. I'm ready to assist you with symptoms, vaccinations, or general health advice.
             </p>
+
+            <Link href="/chat">
+              <button className="group mt-4 flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-2xl font-bold shadow-xl shadow-purple-600/30 hover:scale-105 active:scale-95 transition-all mx-auto md:mx-0">
+                <MessageSquarePlus className="w-6 h-6" />
+                Start New Consultation
+                <ChevronRight className="w-5 h-5 opacity-70 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </Link>
           </div>
-        </Link>
-        
-        {/* Card 3: Map */}
-        <Link href="/map" className="group">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-xl hover:scale-[1.02] transition-all duration-300">
-            <div className="w-14 h-14 bg-gradient-to-br from-red-400 to-red-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-red-200">
-              <MapPin className="w-7 h-7 text-white" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-800">Outbreak Map</h3>
-            <p className="text-slate-500 text-sm mt-1">View disease alerts in your area</p>
-          </div>
-        </Link>
+
+          {/* Right Avatar (3D) */}
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="flex-1 relative w-full max-w-md h-[400px]"
+          >
+            <div className="absolute inset-0 bg-gradient-to-tr from-purple-400/20 to-blue-400/20 rounded-full blur-[80px]" />
+            <img
+              src="/PocketDr. avatar.png"
+              alt="Aiva Avatar"
+              className="relative z-10 w-full h-full object-contain drop-shadow-2xl"
+              style={{ animation: 'float 6s ease-in-out infinite' }}
+            />
+          </motion.div>
+        </div>
+
+        {/* Quick Actions Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          {/* Active Alerts Card */}
+          <Link href="/map" className="block">
+            <DashboardCard
+              icon={Bell}
+              title="Active Alerts"
+              desc={alertCount > 0 ? `${alertCount} Active verified alerts` : "No active alerts"}
+              color="bg-red-100 text-red-600"
+              badge={alertCount > 0}
+              badgeCount={alertCount}
+            />
+          </Link>
+
+          {/* Immunization Card */}
+          <Link href="/vaccinations" className="block">
+            <DashboardCard
+              icon={Syringe}
+              title="Immunization"
+              desc={vaccineCount > 0 ? `${vaccineCount} Vaccines pending/overdue` : "All vaccinations up to date"}
+              color="bg-blue-100 text-blue-600"
+              badge={vaccineCount > 0}
+              badgeCount={vaccineCount}
+            />
+          </Link>
+
+        </div>
+
       </div>
 
-      {/* Health Tips */}
-      <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
-        <h2 className="text-lg font-bold text-slate-800 mb-4">💡 Daily Health Tips</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-100">
-            <span className="text-2xl">🥦</span>
-            <div>
-              <p className="font-semibold text-slate-700">Eat More Greens</p>
-              <p className="text-sm text-slate-500">Include leafy vegetables in your daily diet</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
-            <span className="text-2xl">💧</span>
-            <div>
-              <p className="font-semibold text-slate-700">Stay Hydrated</p>
-              <p className="text-sm text-slate-500">Drink at least 8 glasses of water daily</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-100">
-            <span className="text-2xl">🏃</span>
-            <div>
-              <p className="font-semibold text-slate-700">Exercise Regularly</p>
-              <p className="text-sm text-slate-500">30 minutes of activity keeps you fit</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-100">
-            <span className="text-2xl">😴</span>
-            <div>
-              <p className="font-semibold text-slate-700">Sleep Well</p>
-              <p className="text-sm text-slate-500">Aim for 7-8 hours of quality sleep</p>
-            </div>
-          </div>
+      {/* Float Animation CSS */}
+      <style jsx global>{`
+        @keyframes float {
+          0% { transform: translateY(0px); }
+          50% { transform: translateY(-20px); }
+          100% { transform: translateY(0px); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// Sub-component for Cards
+function DashboardCard({ icon: Icon, title, desc, color, badge, badgeCount }: any) {
+  return (
+    <div className="group p-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-3xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer flex items-center gap-4 relative overflow-hidden h-full">
+      <div className={`w-14 h-14 ${color} rounded-2xl flex items-center justify-center shrink-0`}>
+        <Icon className="w-7 h-7" />
+      </div>
+
+      <div className="flex-1 pr-6">
+        <h3 className="text-xl font-bold text-slate-800 mb-1">{title}</h3>
+        <p className="text-slate-500 text-sm font-medium">{desc}</p>
+      </div>
+
+      {/* Notification Badge with Count */}
+      {badge && (
+        <div className="absolute top-6 right-6 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-lg shadow-red-500/50 animate-pulse">
+          {badgeCount}
         </div>
+      )}
+
+      <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 absolute bottom-6 right-6">
+        <ChevronRight className="w-5 h-5" />
       </div>
     </div>
   );

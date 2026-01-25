@@ -1,305 +1,277 @@
-"use client";
-import { useState, useEffect } from "react";
-import { useAuth } from "@/context/AuthProvider";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Mail, Lock, User, UserPlus, Heart, AlertCircle, CheckCircle, ArrowLeft } from "lucide-react";
+'use client';
 
-interface FieldErrors {
-  name?: boolean;
-  email?: boolean;
-  password?: boolean;
-  confirmPassword?: boolean;
-}
+import { useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+import { Lock, Mail, Loader2, ArrowRight, User, CheckCircle, HeartPulse, Sparkles } from 'lucide-react';
 
 export default function SignupPage() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [shake, setShake] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [showEmailConfirmation, setShowEmailConfirmation] = useState(false);
-  const { signUp } = useAuth();
-  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
-  // Reset shake animation after it completes
-  useEffect(() => {
-    if (shake) {
-      const timer = setTimeout(() => setShake(false), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [shake]);
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
-  // Clear field error and global error when user starts typing
-  const clearFieldError = (field: keyof FieldErrors) => {
-    if (fieldErrors[field]) {
-      setFieldErrors(prev => ({ ...prev, [field]: false }));
-    }
-    if (error) setError(null);
-  };
-
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setName(e.target.value);
-    clearFieldError('name');
-  };
-
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEmail(e.target.value);
-    clearFieldError('email');
-  };
-
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPassword(e.target.value);
-    clearFieldError('password');
-    // Also clear confirmPassword error if passwords might now match
-    if (fieldErrors.confirmPassword && e.target.value === confirmPassword) {
-      setFieldErrors(prev => ({ ...prev, confirmPassword: false }));
-    }
-  };
-
-  const handleConfirmPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setConfirmPassword(e.target.value);
-    clearFieldError('confirmPassword');
-    // Also clear password error if it was a mismatch error
-    if (fieldErrors.password && password === e.target.value) {
-      setFieldErrors(prev => ({ ...prev, password: false }));
-    }
-  };
-
-  // Email validation
-  const isValidEmail = (email: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  };
-
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setFieldErrors({});
-
-    // Client-side validation
-    const errors: FieldErrors = {};
-    let errorMessage = "";
-
-    // Name validation
-    if (!name.trim()) {
-      errors.name = true;
-    }
-
-    // Email validation
-    if (!email.trim()) {
-      errors.email = true;
-    } else if (!isValidEmail(email)) {
-      errors.email = true;
-      errorMessage = "Please enter a valid email address";
-    }
-
-    // Password validation
-    if (!password.trim()) {
-      errors.password = true;
-    } else if (password.length < 6) {
-      errors.password = true;
-      errorMessage = "Password must be at least 6 characters";
-    }
-
-    // Confirm password validation
-    if (!confirmPassword.trim()) {
-      errors.confirmPassword = true;
-    } else if (password !== confirmPassword) {
-      errors.password = true;
-      errors.confirmPassword = true;
-      errorMessage = "Passwords do not match";
-    }
-
-    // Check for any empty field errors first
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      setError(errorMessage || "Please fill in all required fields");
-      setShake(true);
-      return;
-    }
-
     setLoading(true);
-    const { error } = await signUp(email, password, name);
-    
-    if (error) {
-      setError(error.message);
-      setFieldErrors({ email: true });
-      setShake(true);
-      setLoading(false);
-    } else {
-      // Show email confirmation message instead of redirecting
-      setLoading(false);
-      setShowEmailConfirmation(true);
-    }
-  }
+    setError(null);
 
-  // Helper function for input classes
-  const getInputClasses = (hasError: boolean) => `
-    w-full pl-12 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all
-    ${hasError 
-      ? 'border-red-300 bg-red-50/50 focus:ring-red-200 focus:border-red-400' 
-      : 'border-slate-200 focus:ring-[#2db3a0]/50 focus:border-[#2db3a0]'
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
+        },
+      });
+
+      if (error) {
+        setError(error.message);
+      } else {
+        setSuccess(true);
+      }
+    } catch {
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
     }
-  `;
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-      {/* Decorative elements */}
-      <div className="fixed top-0 right-0 w-96 h-96 bg-gradient-to-br from-[#2db3a0]/20 to-[#00509d]/20 rounded-full blur-3xl -z-10"></div>
-      <div className="fixed bottom-0 left-0 w-80 h-80 bg-gradient-to-tr from-[#00509d]/20 to-[#2db3a0]/20 rounded-full blur-3xl -z-10"></div>
-      
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-[#2db3a0] to-[#00509d] rounded-2xl shadow-lg mb-4">
-            <Heart className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-[#2db3a0] to-[#00509d] bg-clip-text text-transparent">
-            PocketDr.
-          </h1>
-          <p className="text-slate-500 mt-2">Create your health profile</p>
-        </div>
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#F4F1FF] flex items-center justify-center font-sans selection:bg-purple-200">
 
-        {/* Signup Card */}
-        <div className={`bg-white rounded-2xl shadow-xl p-8 border border-slate-100 ${shake ? 'animate-shake' : ''}`}>
-          
-          {/* Email Confirmation Success Screen */}
-          {showEmailConfirmation ? (
-            <div className="text-center py-4 animate-slide-in">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-[#2db3a0] to-[#00509d] rounded-full mb-6">
-                <CheckCircle className="w-8 h-8 text-white" />
-              </div>
-              <h2 className="text-xl font-bold text-slate-800 mb-3">Check Your Email!</h2>
-              <p className="text-slate-500 mb-6">
-                We've sent a confirmation link to<br />
-                <span className="font-semibold text-slate-700">{email}</span>
-              </p>
-              <p className="text-sm text-slate-400 mb-6">
-                Click the link in the email to activate your account and start your health journey.
-              </p>
-              <div className="space-y-3">
-                <Link 
-                  href="/login" 
-                  className="w-full py-3 bg-gradient-to-r from-[#2db3a0] to-[#00509d] text-white font-semibold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Go to Login
-                </Link>
-                <button
-                  onClick={() => setShowEmailConfirmation(false)}
-                  className="w-full py-3 border border-slate-200 text-slate-600 font-medium rounded-xl hover:bg-slate-50 transition-all"
-                >
-                  Use Different Email
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <h2 className="text-xl font-bold text-slate-800 mb-6">Create Account</h2>
-              
-              {error && (
-                <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl mb-4 border border-red-200 flex items-center gap-2 animate-slide-in">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
+      {/* --- BACKGROUND ANIMATIONS (Matches Login) --- */}
+      <div className="absolute inset-0 w-full h-full z-0">
+        {/* Purple Blob */}
+        <motion.div
+          animate={{ x: [0, 100, 0], y: [0, -50, 0], scale: [1, 1.2, 1] }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-300/40 rounded-full blur-[100px]"
+        />
+        {/* Blue Blob */}
+        <motion.div
+          animate={{ x: [0, -100, 0], y: [0, 50, 0], scale: [1, 1.1, 1] }}
+          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+          className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-blue-300/40 rounded-full blur-[120px]"
+        />
+        {/* Pink Accent */}
+        <motion.div
+          animate={{ opacity: [0.4, 0.7, 0.4] }}
+          transition={{ duration: 8, repeat: Infinity }}
+          className="absolute top-[40%] left-[40%] w-[300px] h-[300px] bg-pink-200/30 rounded-full blur-[80px]"
+        />
+      </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className={`block text-sm font-semibold mb-2 ${fieldErrors.name ? 'text-red-500' : 'text-slate-700'}`}>
-                Full Name
-              </label>
-              <div className="relative">
-                <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${fieldErrors.name ? 'text-red-400' : 'text-slate-400'}`} />
-                <input
-                  type="text"
-                  value={name}
-                  onChange={handleNameChange}
-                  placeholder="John Doe"
-                  className={getInputClasses(!!fieldErrors.name)}
-                />
-              </div>
-            </div>
+      {/* --- MAIN GLASS CONTAINER --- */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="relative z-10 w-full max-w-5xl p-4 md:p-8 flex flex-col md:flex-row items-center justify-center gap-12"
+      >
 
-            <div>
-              <label className={`block text-sm font-semibold mb-2 ${fieldErrors.email ? 'text-red-500' : 'text-slate-700'}`}>
-                Email
-              </label>
-              <div className="relative">
-                <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${fieldErrors.email ? 'text-red-400' : 'text-slate-400'}`} />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={handleEmailChange}
-                  placeholder="you@example.com"
-                  className={getInputClasses(!!fieldErrors.email)}
-                />
-              </div>
-            </div>
+        {/* LEFT SIDE: 3D Avatar & Intro */}
+        <div className="flex-1 text-center md:text-left space-y-6 max-w-md">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="relative w-full h-[300px] md:h-[400px] flex items-center justify-center"
+          >
+            {/* 3D Glass Card Background behind Avatar */}
+            <div className="absolute inset-0 bg-white/30 backdrop-blur-xl border border-white/40 rounded-[2rem] shadow-2xl shadow-purple-500/10 transform -rotate-6 z-0" />
 
-            <div>
-              <label className={`block text-sm font-semibold mb-2 ${fieldErrors.password ? 'text-red-500' : 'text-slate-700'}`}>
-                Password
-              </label>
-              <div className="relative">
-                <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${fieldErrors.password ? 'text-red-400' : 'text-slate-400'}`} />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={handlePasswordChange}
-                  placeholder="••••••••"
-                  className={getInputClasses(!!fieldErrors.password)}
-                />
-              </div>
-            </div>
+            {/* 3D Avatar Image */}
+            <img
+              src="/PocketDr. avatar.png"
+              alt="Aiva 3D Avatar"
+              className="w-full h-full object-contain relative z-10 w-[80%] h-auto drop-shadow-2xl animate-float -rotate-[2deg]"
+              style={{ animation: 'float 6s ease-in-out infinite' }}
+            />
 
-            <div>
-              <label className={`block text-sm font-semibold mb-2 ${fieldErrors.confirmPassword ? 'text-red-500' : 'text-slate-700'}`}>
-                Confirm Password
-              </label>
-              <div className="relative">
-                <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${fieldErrors.confirmPassword ? 'text-red-400' : 'text-slate-400'}`} />
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={handleConfirmPasswordChange}
-                  placeholder="••••••••"
-                  className={getInputClasses(!!fieldErrors.confirmPassword)}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 bg-gradient-to-r from-[#2db3a0] to-[#00509d] text-white font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-teal-200 mt-6"
+            {/* Floating Badge */}
+            <motion.div
+              initial={{ x: 50, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="absolute -right-4 top-10 bg-white/80 backdrop-blur-md p-3 rounded-2xl shadow-lg border border-white/50 flex items-center gap-2 z-20"
             >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <>
-                  <UserPlus className="w-5 h-5" />
-                  Create Account
-                </>
-              )}
-            </button>
-          </form>
+              <div className="bg-green-100 p-1.5 rounded-full">
+                <HeartPulse className="w-4 h-4 text-green-600" />
+              </div>
+              <div className="text-xs">
+                <p className="font-bold text-slate-800">Trusted Partner</p>
+                <p className="text-slate-500">WHO Verified Data</p>
+              </div>
+            </motion.div>
+          </motion.div>
 
-          <div className="mt-6 text-center">
-            <p className="text-slate-500 text-sm">
-              Already have an account?{" "}
-              <Link href="/login" className="text-[#2db3a0] font-semibold hover:underline">
-                Sign in
-              </Link>
+          <div className="space-y-2 relative z-10">
+            <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600 leading-tight">
+              Join PocketDr
+            </h1>
+            <p className="text-lg text-slate-600 font-medium">
+              Start your personal health journey with Aiva. <br />
+              <span className="text-sm font-normal text-slate-500">24/7 AI-powered health monitoring.</span>
             </p>
           </div>
-            </>
-          )}
         </div>
-      </div>
+
+        {/* RIGHT SIDE: Signup Form or Success State */}
+        <motion.div
+          initial={{ x: 50, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="w-full max-w-sm"
+        >
+          <div className="bg-white/60 backdrop-blur-xl border border-white/60 p-8 rounded-3xl shadow-xl shadow-purple-900/5">
+            
+            {success ? (
+              // SUCCESS STATE
+              <div className="text-center py-8 space-y-6">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 text-green-600 mb-4 animate-bounce">
+                  <CheckCircle className="w-10 h-10" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold text-slate-800">Check your email</h2>
+                  <p className="text-slate-600 text-sm">
+                    We&apos;ve sent a verification link to <br/>
+                    <span className="font-semibold text-purple-600">{email}</span>
+                  </p>
+                </div>
+                <div className="pt-4">
+                   <p className="text-xs text-slate-400">
+                    Did not receive it? Check spam folder or{' '}
+                     <button onClick={() => setSuccess(false)} className="text-purple-600 hover:underline">try again</button>.
+                   </p>
+                </div>
+                <div className="pt-6 border-t border-slate-200/60">
+                   <Link href="/login" className="text-sm font-medium text-purple-600 hover:text-purple-700 flex items-center justify-center gap-2">
+                     <ArrowRight className="w-4 h-4 rotate-180" /> Back to Login
+                   </Link>
+                </div>
+              </div>
+            ) : (
+              // SIGNUP FORM
+              <>
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 text-white mb-4 shadow-lg shadow-purple-500/30">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-800">Create your account</h2>
+                  <p className="text-slate-500 text-sm mt-1">Start your personal health journey with Aiva.</p>
+                </div>
+
+                {error && (
+                  <div className="mb-6 p-3 rounded-xl bg-red-50/80 border border-red-100 text-xs text-red-600 text-center font-medium">
+                    {error}
+                  </div>
+                )}
+
+                <form onSubmit={handleSignup} className="space-y-5">
+                  {/* Full Name */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600 ml-1">Full Name</label>
+                    <div className="relative group">
+                      <User className="absolute left-4 top-3.5 w-4 h-4 text-slate-400 group-focus-within:text-purple-500 transition-colors" />
+                      <input
+                        type="text"
+                        required
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        placeholder="John Doe"
+                        className="w-full pl-10 pr-4 py-3 bg-white/50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all placeholder:text-slate-400 text-sm text-slate-800"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600 ml-1">Email</label>
+                    <div className="relative group">
+                      <Mail className="absolute left-4 top-3.5 w-4 h-4 text-slate-400 group-focus-within:text-purple-500 transition-colors" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full pl-10 pr-4 py-3 bg-white/50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all placeholder:text-slate-400 text-sm text-slate-800"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600 ml-1">Password</label>
+                    <div className="relative group">
+                      <Lock className="absolute left-4 top-3.5 w-4 h-4 text-slate-400 group-focus-within:text-purple-500 transition-colors" />
+                      <input
+                        type="password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full pl-10 pr-4 py-3 bg-white/50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all placeholder:text-slate-400 text-sm text-slate-800"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3.5 px-4 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-medium shadow-lg shadow-purple-600/20 transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70"
+                  >
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                      <>
+                        Create Account <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                <div className="mt-8 pt-6 border-t border-slate-200/60 text-center">
+                  <p className="text-xs text-slate-500">
+                    Already have an account?{' '}
+                    <Link href="/login" className="text-purple-600 font-semibold hover:text-purple-700 transition-colors">
+                      Sign in
+                    </Link>
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* Privacy Note */}
+            {!success && (
+              <div className="mt-6 text-center">
+                <p className="text-[10px] text-slate-400 flex items-center justify-center gap-1.5">
+                  <Lock className="w-3 h-3" /> Encrypted & Private. Verified by Medical Experts.
+                </p>
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+      </motion.div>
+
+      {/* CSS for custom float animation if needed, though we use framer-motion mostly */}
+      <style jsx global>{`
+        @keyframes float {
+          0% { transform: translateY(0px); }
+          50% { transform: translateY(-15px); }
+          100% { transform: translateY(0px); }
+        }
+      `}</style>
     </div>
   );
 }

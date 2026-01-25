@@ -1,420 +1,330 @@
-"use client";
-import dynamic from "next/dynamic";
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import { getAlerts, Alert } from "@/app/actions/alerts";
-import { MapPin, AlertTriangle, Activity, Shield, RefreshCw, Info, Wind, Thermometer, Droplets, Navigation } from "lucide-react";
+'use client';
 
-// Dynamic import with SSR disabled
-const OutbreakMap = dynamic(() => import("@/components/OutbreakMap"), {
+import { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  ArrowLeft, ShieldAlert, AlertTriangle,
+  MapPin, Plus, X, Loader2, CheckCircle2, LocateFixed, Navigation
+} from 'lucide-react';
+
+// Dynamically import Map
+const OutbreakMap = dynamic(() => import('@/components/OutbreakMap'), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-full bg-slate-50 rounded-2xl">
-      <div className="text-center">
-        <div className="w-14 h-14 border-4 border-[#2db3a0] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-slate-500 font-medium">Loading outbreak data...</p>
-      </div>
+    <div className="w-full h-full flex items-center justify-center bg-slate-100 rounded-3xl text-slate-400">
+      <Loader2 className="w-8 h-8 animate-spin" />
     </div>
-  ),
+  )
 });
 
-interface LocationData {
-  city: string;
-  country: string;
-  lat: number;
-  lon: number;
-}
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-interface WeatherData {
-  temp: number;
-  humidity: number;
+type Alert = {
+  id: string;
+  title: string;
+  location: string;
+  severity: 'High' | 'Medium' | 'Low';
   description: string;
-  icon: string;
-  windSpeed: number;
-  visibility: number;
-}
-
-interface AQIData {
-  aqi: number;
-  level: string;
-  color: string;
-  pm25: number;
-  pm10: number;
-}
+  status: 'verified' | 'pending';
+  lat: number;
+  lng: number;
+  created_at: string;
+};
 
 export default function MapPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [location, setLocation] = useState<LocationData | null>(null);
-  const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [aqi, setAqi] = useState<AQIData | null>(null);
-  const [loadingLocation, setLoadingLocation] = useState(true);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [focusedLocation, setFocusedLocation] = useState<{ lat: number; lon: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
+  // Map State
+  const [focusedLocation, setFocusedLocation] = useState<[number, number] | null>(null);
+
+  const router = useRouter();
+
+  // Report Form States
+  const [newTitle, setNewTitle] = useState('');
+  const [newLocation, setNewLocation] = useState('');
+  const [newSeverity, setNewSeverity] = useState('Medium');
+  const [newDesc, setNewDesc] = useState('');
+  const [selectedCoords, setSelectedCoords] = useState<{ lat: number, lng: number } | null>(null);
+
+  // --- FETCH VERIFIED ALERTS ---
   useEffect(() => {
+    const fetchAlerts = async () => {
+      const { data } = await supabase
+        .from('alerts')
+        .select('*')
+        .eq('status', 'verified')
+        .order('created_at', { ascending: false });
+
+      if (data) setAlerts(data as Alert[]);
+      setLoading(false);
+    };
+
     fetchAlerts();
-    getUserLocation();
   }, []);
 
-  async function fetchAlerts() {
-    try {
-      // Use Server Action instead of direct DB call to get Fallback Data support
-      const data = await getAlerts();
-      if (data) setAlerts(data);
-    } catch (e) {
-       console.error("Failed to fetch alerts", e);
+  // --- HANDLE LIST CLICK (Fly to Pin) ---
+  const handleAlertClick = (alertItem: Alert) => {
+    if (alertItem.lat && alertItem.lng) {
+      setFocusedLocation([alertItem.lat, alertItem.lng]);
+    } else {
+      window.alert("No coordinates available for this report.");
     }
-  }
+  };
 
-  function getUserLocation() {
-    if (!navigator.geolocation) {
-      setLocationError("Geolocation not supported");
-      setLoadingLocation(false);
-      return;
+  // --- HANDLE MAP CLICK (Set Pin for Report) ---
+  const handleMapClick = (lat: number, lng: number) => {
+    setSelectedCoords({ lat, lng });
+    setIsReportOpen(true);
+    setNewLocation(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+  };
+
+  // --- SUBMIT REPORT ---
+  const handleReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+
+    const { error } = await supabase
+      .from('alerts')
+      .insert([{
+        title: newTitle,
+        location: newLocation,
+        severity: newSeverity,
+        description: newDesc,
+        status: 'pending',
+        lat: selectedCoords?.lat || null,
+        lng: selectedCoords?.lng || null
+      }]);
+
+    if (!error) {
+      setSubmitted(true);
+      setTimeout(() => {
+        setIsReportOpen(false);
+        setSubmitted(false);
+        setNewTitle('');
+        setNewLocation('');
+        setNewDesc('');
+        setSelectedCoords(null);
+      }, 2000);
+    } else {
+      window.alert("Failed to report.");
     }
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        await fetchLocationData(latitude, longitude);
-      },
-      (error) => {
-        // Error handled via state below
-        // Fallback to Delhi, India
-        fetchLocationData(28.6139, 77.2090);
-        setLocationError("Using default location (Delhi)");
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  }
-
-  async function fetchLocationData(lat: number, lon: number) {
-    try {
-      // Fetch location name using reverse geocoding (free API)
-      const geoRes = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
-      );
-      const geoData = await geoRes.json();
-      
-      // Check multiple address fields for location name (Greater Noida might be suburb/county/etc)
-      const addr = geoData.address || {};
-      const cityName = addr.city || addr.suburb || addr.town || addr.county || 
-                       addr.state_district || addr.district || addr.municipality || 
-                       addr.village || addr.hamlet || "Unknown";
-      const stateName = addr.state || "";
-      
-      setLocation({
-        city: cityName,
-        country: stateName ? `${stateName}, ${addr.country || "India"}` : (addr.country || "India"),
-        lat,
-        lon,
-      });
-
-      // Fetch weather data using Open-Meteo (free, no API key needed)
-      const weatherRes = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,visibility`
-      );
-      const weatherData = await weatherRes.json();
-      
-      if (weatherData.current) {
-        const weatherCode = weatherData.current.weather_code;
-        setWeather({
-          temp: Math.round(weatherData.current.temperature_2m),
-          humidity: weatherData.current.relative_humidity_2m,
-          description: getWeatherDescription(weatherCode),
-          icon: getWeatherIcon(weatherCode),
-          windSpeed: Math.round(weatherData.current.wind_speed_10m),
-          visibility: Math.round((weatherData.current.visibility || 10000) / 1000),
-        });
-      }
-
-      // Fetch AQI data using Open-Meteo Air Quality API (free)
-      const aqiRes = await fetch(
-        `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm2_5,pm10,us_aqi`
-      );
-      const aqiData = await aqiRes.json();
-      
-      if (aqiData.current) {
-        const aqiValue = aqiData.current.us_aqi || 50;
-        setAqi({
-          aqi: aqiValue,
-          level: getAQILevel(aqiValue),
-          color: getAQIColor(aqiValue),
-          pm25: Math.round(aqiData.current.pm2_5 || 0),
-          pm10: Math.round(aqiData.current.pm10 || 0),
-        });
-      }
-    } catch (e) {
-      // Error handled via silent fail or UI message if needed
-    } finally {
-      setLoadingLocation(false);
-    }
-  }
-
-  function getWeatherDescription(code: number): string {
-    if (code === 0) return "Clear sky";
-    if (code <= 3) return "Partly cloudy";
-    if (code <= 48) return "Foggy";
-    if (code <= 57) return "Drizzle";
-    if (code <= 67) return "Rain";
-    if (code <= 77) return "Snow";
-    if (code <= 82) return "Rain showers";
-    if (code <= 86) return "Snow showers";
-    return "Thunderstorm";
-  }
-
-  function getWeatherIcon(code: number): string {
-    if (code === 0) return "☀️";
-    if (code <= 3) return "⛅";
-    if (code <= 48) return "🌫️";
-    if (code <= 67) return "🌧️";
-    if (code <= 77) return "❄️";
-    if (code <= 86) return "🌨️";
-    return "⛈️";
-  }
-
-  function getAQILevel(aqi: number): string {
-    if (aqi <= 50) return "Good";
-    if (aqi <= 100) return "Moderate";
-    if (aqi <= 150) return "Unhealthy for Sensitive";
-    if (aqi <= 200) return "Unhealthy";
-    if (aqi <= 300) return "Very Unhealthy";
-    return "Hazardous";
-  }
-
-  function getAQIColor(aqi: number): string {
-    if (aqi <= 50) return "bg-green-500";
-    if (aqi <= 100) return "bg-yellow-500";
-    if (aqi <= 150) return "bg-orange-500";
-    if (aqi <= 200) return "bg-red-500";
-    if (aqi <= 300) return "bg-purple-500";
-    return "bg-rose-900";
-  }
-
-  const highCount = alerts.filter(a => a.severity === "high").length;
-  const mediumCount = alerts.filter(a => a.severity === "medium").length;
-  const lowCount = alerts.filter(a => a.severity === "low").length;
+    setIsSaving(false);
+  };
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div className="relative h-screen w-full overflow-hidden bg-[#F4F1FF] font-sans selection:bg-purple-200 flex flex-col">
+
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-[#2db3a0] to-[#00509d] bg-clip-text text-transparent">
-            Outbreak Map
-          </h1>
-          <p className="text-slate-500 mt-1">Real-time disease & environment alerts</p>
+      <header className="flex-none p-4 md:p-6 flex items-center justify-between z-20 bg-white/80 backdrop-blur-md border-b border-white/50">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="flex items-center gap-2 px-4 py-2 bg-white rounded-full text-slate-600 hover:text-purple-600 shadow-sm border border-slate-100 transition-all"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="font-bold text-sm hidden md:inline">Dashboard</span>
+          </button>
+
+          <div className="flex items-center gap-2 px-3 py-1 bg-red-100 text-red-700 rounded-full border border-red-200">
+            <ShieldAlert className="w-4 h-4 animate-pulse" />
+            <span className="text-xs font-bold uppercase tracking-wider">Live Bio-Radar</span>
+          </div>
         </div>
-        <button 
-          onClick={() => { fetchAlerts(); getUserLocation(); }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+
+        <button
+          onClick={() => { setSelectedCoords(null); setIsReportOpen(true); }}
+          className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-full shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all text-sm font-bold active:scale-95"
         >
-          <RefreshCw size={18} />
-          Refresh
+          <Plus className="w-4 h-4" /> <span className="hidden md:inline">Report Outbreak</span>
         </button>
-      </div>
+      </header>
 
-      {/* Location & Weather Card */}
-      <div className="bg-gradient-to-r from-[#2db3a0] to-[#00509d] rounded-2xl p-6 text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/4"></div>
-        
-        <div className="relative z-10">
-          {loadingLocation ? (
-            <div className="flex items-center gap-3">
-              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              <span>Detecting your location...</span>
-            </div>
-          ) : (
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-              {/* Location Info */}
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                  <Navigation size={24} />
-                </div>
-                <div>
-                  <p className="text-white/70 text-sm flex items-center gap-1">
-                    <MapPin size={14} /> Your Location
-                  </p>
-                  <h2 className="text-2xl font-bold">
-                    {location?.city || "Unknown"}, {location?.country || ""}
-                  </h2>
-                  {locationError && (
-                    <p className="text-white/60 text-xs mt-1">{locationError}</p>
-                  )}
-                </div>
+      {/* Main Content: Split View */}
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative z-10 p-4 md:p-6 gap-6">
+
+        {/* LEFT: ALERT LIST */}
+        <div className="w-full md:w-1/3 flex flex-col gap-4 overflow-hidden h-full">
+          <h2 className="text-xl font-extrabold text-slate-800 shrink-0 px-2">Verified Threats</h2>
+
+          <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-20 scrollbar-hide">
+            {loading ? (
+              [1, 2, 3].map(i => <div key={i} className="h-32 bg-white/50 rounded-3xl animate-pulse" />)
+            ) : alerts.length === 0 ? (
+              <div className="text-center py-12 bg-white/40 rounded-3xl border border-white/50 border-dashed">
+                <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto mb-3 opacity-50" />
+                <p className="text-slate-500 font-medium">No verified threats in your area.</p>
               </div>
-
-              {/* Weather */}
-              {weather && (
-                <div className="flex items-center gap-6 bg-white/10 backdrop-blur-sm rounded-xl p-4">
-                  <div className="text-center">
-                    <span className="text-4xl">{weather.icon}</span>
-                    <p className="text-xs text-white/70 mt-1">{weather.description}</p>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="text-center">
-                      <Thermometer size={18} className="mx-auto text-white/70" />
-                      <p className="text-xl font-bold">{weather.temp}°C</p>
-                      <p className="text-xs text-white/60">Temp</p>
-                    </div>
-                    <div className="text-center">
-                      <Droplets size={18} className="mx-auto text-white/70" />
-                      <p className="text-xl font-bold">{weather.humidity}%</p>
-                      <p className="text-xs text-white/60">Humidity</p>
-                    </div>
-                    <div className="text-center">
-                      <Wind size={18} className="mx-auto text-white/70" />
-                      <p className="text-xl font-bold">{weather.windSpeed}</p>
-                      <p className="text-xs text-white/60">km/h</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* AQI */}
-              {aqi && (
-                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-                  <p className="text-xs text-white/70 mb-2">Air Quality Index</p>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-14 h-14 ${aqi.color} rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg`}>
-                      {aqi.aqi}
-                    </div>
-                    <div>
-                      <p className="font-bold text-lg">{aqi.level}</p>
-                      <p className="text-xs text-white/60">PM2.5: {aqi.pm25} | PM10: {aqi.pm10}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-slate-700 to-slate-900 rounded-xl text-white">
-              <MapPin size={18} />
-            </div>
-            <div>
-              <p className="text-slate-400 text-xs">Total</p>
-              <p className="text-xl font-bold text-slate-800">{alerts.length}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-red-500 to-red-600 rounded-xl text-white">
-              <AlertTriangle size={18} />
-            </div>
-            <div>
-              <p className="text-slate-400 text-xs">High</p>
-              <p className="text-xl font-bold text-red-600">{highCount}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-orange-400 to-orange-500 rounded-xl text-white">
-              <Activity size={18} />
-            </div>
-            <div>
-              <p className="text-slate-400 text-xs">Medium</p>
-              <p className="text-xl font-bold text-orange-600">{mediumCount}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-xl text-white">
-              <Shield size={18} />
-            </div>
-            <div>
-              <p className="text-slate-400 text-xs">Low</p>
-              <p className="text-xl font-bold text-yellow-600">{lowCount}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Map Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Map */}
-        <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden relative z-0">
-          <div className="h-[450px]">
-            <OutbreakMap 
-              alerts={alerts} 
-              userLocation={location ? { lat: location.lat, lon: location.lon } : null} 
-              focusLocation={focusedLocation}
-            />
-          </div>
-        </div>
-
-        {/* Sidebar - Alert List */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <h2 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <AlertTriangle size={18} className="text-red-500" />
-            Active Alerts
-          </h2>
-          
-          {alerts.length === 0 ? (
-            <p className="text-slate-400 text-sm text-center py-8">No alerts found</p>
-          ) : (
-            <div className="space-y-3 max-h-[360px] overflow-y-auto">
-              {alerts.map((alert) => (
-                <div 
+            ) : (
+              alerts.map((alert) => (
+                <div
                   key={alert.id}
-                  onClick={() => setFocusedLocation({ lat: alert.latitude, lon: alert.longitude })}
-                  className={`p-3 rounded-xl border-l-4 cursor-pointer transition-all hover:shadow-md ${
-                    alert.severity === "high" 
-                      ? "bg-red-50 border-red-500 hover:bg-red-100" 
-                      : alert.severity === "medium"
-                      ? "bg-orange-50 border-orange-500 hover:bg-orange-100"
-                      : "bg-yellow-50 border-yellow-500 hover:bg-yellow-100"
-                  }`}
+                  onClick={() => handleAlertClick(alert)}
+                  className="group bg-white/80 backdrop-blur-sm border border-white/60 p-5 rounded-3xl shadow-sm hover:shadow-md hover:bg-white hover:scale-[1.02] transition-all relative overflow-hidden cursor-pointer active:scale-95"
                 >
-                  <h3 className="font-semibold text-slate-800 text-sm">{alert.title}</h3>
-                  <p className="text-slate-500 text-xs mt-1 line-clamp-2">{alert.description}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 
+                    ${alert.severity === 'High' ? 'bg-red-500' :
+                      alert.severity === 'Medium' ? 'bg-orange-400' : 'bg-blue-400'}`}
+                  />
+                  <div className="pl-3">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-bold text-slate-800 group-hover:text-purple-700 transition-colors">{alert.title}</h3>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${alert.severity === 'High' ? 'bg-red-100 text-red-700' :
+                          alert.severity === 'Medium' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                        {alert.severity}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mb-2 font-medium">
+                      <MapPin className="w-3 h-3 text-slate-400" /> {alert.location}
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">{alert.description}</p>
 
-      {/* Legend & Safety */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
-            <Info size={16} className="text-[#2db3a0]" />
-            Severity Legend
-          </h3>
-          <div className="flex gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="w-4 h-4 rounded-full bg-red-500"></span>
-              <span className="text-slate-600">High</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-4 h-4 rounded-full bg-orange-500"></span>
-              <span className="text-slate-600">Medium</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-4 h-4 rounded-full bg-yellow-500"></span>
-              <span className="text-slate-600">Low</span>
-            </div>
+                    <div className="mt-3 flex items-center gap-1 text-[10px] font-bold text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Navigation className="w-3 h-3" /> Show on Map
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
-        <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-100 rounded-2xl p-5">
-          <h3 className="font-bold text-red-900 mb-2">🚨 Stay Safe</h3>
-          <p className="text-red-800 text-sm">Wash hands frequently • Avoid crowded areas • Follow local health advisories</p>
+        {/* RIGHT: MAP */}
+        <div className="w-full md:w-2/3 h-[400px] md:h-full bg-white rounded-[2rem] shadow-xl border border-white/50 overflow-hidden relative">
+          <OutbreakMap
+            alerts={alerts}
+            onMapClick={handleMapClick}
+            focusedLocation={focusedLocation}
+          />
+
+          <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-4 py-2 rounded-xl shadow-sm text-xs font-bold text-slate-500 z-[400] pointer-events-none flex items-center gap-2 border border-slate-100">
+            <LocateFixed className="w-3 h-3 text-purple-600" />
+            Click map to report location
+          </div>
         </div>
+
       </div>
+
+      {/* REPORT MODAL */}
+      <AnimatePresence>
+        {isReportOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+          >
+            <div className="absolute inset-0" onClick={() => setIsReportOpen(false)} />
+
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden"
+            >
+              {submitted ? (
+                <div className="p-8 flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-2">
+                    <CheckCircle2 className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-800">Report Submitted</h3>
+                  <p className="text-slate-500 text-sm">Your report has been sent to the admin team for verification.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="p-6 bg-red-50 border-b border-red-100 flex justify-between items-center">
+                    <h3 className="text-lg font-bold text-red-800 flex items-center gap-2">
+                      <ShieldAlert className="w-5 h-5" /> Report Outbreak
+                    </h3>
+                    <button onClick={() => setIsReportOpen(false)} className="p-2 hover:bg-white rounded-full text-red-400 hover:text-red-600 transition-colors">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleReport} className="p-6 space-y-4">
+
+                    {/* Coordinates Display */}
+                    {selectedCoords && (
+                      <div className="bg-blue-50 px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold text-blue-700 border border-blue-100">
+                        <MapPin className="w-3.5 h-3.5" />
+                        Pinned: {selectedCoords.lat.toFixed(4)}, {selectedCoords.lng.toFixed(4)}
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase">Alert Title</label>
+                      <input
+                        type="text"
+                        required
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        placeholder="e.g. Dengue Cluster"
+                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all outline-none text-slate-800 text-sm font-medium"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Location Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={newLocation}
+                          onChange={(e) => setNewLocation(e.target.value)}
+                          placeholder="Sector / Area"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all outline-none text-slate-800 text-sm font-medium"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-500 uppercase">Severity</label>
+                        <select
+                          value={newSeverity}
+                          onChange={(e) => setNewSeverity(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all outline-none text-slate-800 text-sm font-medium"
+                        >
+                          <option value="Low">Low Risk</option>
+                          <option value="Medium">Medium Risk</option>
+                          <option value="High">High Risk</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase">Description</label>
+                      <textarea
+                        rows={3}
+                        value={newDesc}
+                        onChange={(e) => setNewDesc(e.target.value)}
+                        placeholder="Details..."
+                        className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all outline-none text-slate-800 resize-none text-sm"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="w-full py-3.5 bg-red-600 text-white rounded-xl font-bold shadow-lg shadow-red-600/30 hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50 mt-2"
+                    >
+                      {isSaving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Submit Report"}
+                    </button>
+                  </form>
+                </>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
