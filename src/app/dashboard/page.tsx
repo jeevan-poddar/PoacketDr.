@@ -81,21 +81,6 @@ export default function DashboardPage() {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#F4F1FF] font-sans selection:bg-purple-200">
-
-      {/* --- BACKGROUND ANIMATION --- */}
-      <div className="absolute inset-0 pointer-events-none z-0">
-        <motion.div
-          animate={{ x: [0, 50, 0], y: [0, -50, 0] }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-purple-200/40 rounded-full blur-[120px]"
-        />
-        <motion.div
-          animate={{ x: [0, -50, 0], y: [0, 50, 0] }}
-          transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-          className="absolute bottom-[-20%] right-[-10%] w-[700px] h-[700px] bg-blue-200/40 rounded-full blur-[120px]"
-        />
-      </div>
-
       {/* --- CONTENT CONTAINER --- */}
       <div className="relative z-10 max-w-6xl mx-auto p-6 md:p-12">
 
@@ -165,7 +150,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Actions Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
           {/* Active Alerts Card */}
           <Link href="/map" className="block">

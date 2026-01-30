@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/context/AuthProvider";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
+import BottomNav from "./BottomNav";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -31,7 +32,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     if (user && isAuthPage) {
       return (
         <div className="flex items-center justify-center min-h-screen">
-          <div className="w-10 h-10 border-4 border-[#2db3a0] border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-10 h-10 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
         </div>
       );
     }
@@ -41,24 +42,29 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   if (loading || !user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="w-10 h-10 border-4 border-[#2db3a0] border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-10 h-10 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
-  
+
   // Show sidebar for authenticated users
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-[#F4F1FF]">
       <Sidebar />
-      <main className="flex-1 ml-64 relative">
-        {/* Decorative background */}
-        <div className="fixed top-0 right-0 w-96 h-96 bg-gradient-to-br from-[#2db3a0]/10 to-[#00509d]/10 rounded-full blur-3xl -z-10"></div>
-        <div className="fixed bottom-0 left-64 w-80 h-80 bg-gradient-to-tr from-[#00509d]/10 to-[#2db3a0]/10 rounded-full blur-3xl -z-10"></div>
-        
-        <div className="relative z-10">
+      {/* - ml-0: No margin on mobile so content is full-width 
+          - md:ml-72: Adds margin on desktop to prevent sidebar overlap
+      */}
+      <main className="flex-1 ml-0 md:ml-72 relative min-w-0 transition-all duration-300 pb-20 md:pb-0">
+
+        {/* Decorative backgrounds */}
+        <div className="fixed top-0 right-0 w-64 md:w-96 h-64 md:h-96 bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-full blur-3xl -z-10"></div>
+        <div className="fixed bottom-0 left-0 md:left-72 w-64 md:w-80 h-64 md:h-80 bg-gradient-to-tr from-blue-500/10 to-purple-500/10 rounded-full blur-3xl -z-10"></div>
+
+        <div className="relative z-10 w-full">
           {children}
         </div>
       </main>
+      <BottomNav />
     </div>
   );
 }

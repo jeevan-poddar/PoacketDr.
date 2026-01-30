@@ -103,8 +103,8 @@ export default function Sidebar() {
               key={link.href}
               href={link.href}
               className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 group font-medium ${isActive
-                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/25 translate-x-1'
-                  : 'text-slate-500 hover:bg-purple-50 hover:text-purple-600'
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/25 translate-x-1'
+                : 'text-slate-500 hover:bg-purple-50 hover:text-purple-600'
                 }`}
             >
               <Icon
